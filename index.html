@@ -248,6 +248,19 @@ async function adminFeedback(){
 }
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function attr(s){return esc(s)}
+ </script></script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js")
+      .then(() => console.log("AIIMS CRE App ready"))
+      .catch(err => console.error("Service Worker error:", err));
+  });
+}
 </script>
+
 </body>
 </html>
+
+
