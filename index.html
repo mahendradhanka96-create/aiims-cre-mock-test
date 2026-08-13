@@ -13,6 +13,8 @@ body{margin:0;font-family:Arial;background:#eef3f8;color:#172033}header{backgrou
 <section id="admin" class="hide"><div class="card"><h2>Owner / Admin</h2><button class="p" onclick="adminTests()">Tests</button><button class="l" onclick="adminResults()">सभी Results / Rank</button><button class="l" onclick="adminFeedback()">Feedback</button><button class="l" onclick="show('home')">Logout</button></div><div id="adminBody" class="card"></div></section>
 </div><script>
 const SUPABASE_URL="https://dqumlteggtfygpssjtzk.supabase.co";
+  const SUPABASE_ANON_KEY="sb_publishable_Rfvy1drDWb-fXgP37UdEAw_QWg0X_cu";
+const ADMIN_CODE="8890";
 let tests=[],test=null,idx=0,answers=[],end=0,lastResultId=null;
 const $=x=>document.getElementById(x);const show=x=>{["home","student","exam","result","admin"].forEach(y=>$(y).classList.add("hide"));$(x).classList.remove("hide")};
 async function api(t,m="GET",b=null,q=""){let h={"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY,"Content-Type":"application/json","Prefer":"return=representation"};let r=await fetch(SUPABASE_URL+"/rest/v1/"+t+q,{method:m,headers:h,body:b?JSON.stringify(b):null});if(!r.ok)throw Error(await r.text());return r.status===204?null:r.json()}
