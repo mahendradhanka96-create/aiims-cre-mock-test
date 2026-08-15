@@ -11,7 +11,7 @@ body{margin:0;font-family:Arial,sans-serif;background:#eef3f8;color:#172033}
 header{background:#123b6d;color:#fff;padding:14px;display:flex;justify-content:space-between}
 .wrap{max-width:1050px;margin:auto;padding:12px}.card{background:#fff;padding:16px;border-radius:14px;margin:10px 0;box-shadow:0 2px 12px #0001}
 button{border:0;border-radius:8px;padding:10px 14px;margin:4px;cursor:pointer}.p{background:#1769aa;color:#fff}.g{background:#159447;color:#fff}.d{background:#c62828;color:#fff}.l{background:#e8edf3}
-input,textarea,select{padding:10px;width:100%;box-sizing:border-box;margin:5px 0;border:1px solid #ccd5df;border-radius:8px}
+input,textarea,select{padding:10px;width:100%;box-sizing:border-box;msargin:5px 0;border:1px solid #ccd5df;border-radius:8px}
 .hide{display:none}.opts button{display:block;width:100%;text-align:left;background:#f8fafc;border:2px solid #dbe3ec}.opts .sel{border-color:#1769aa;background:#e5f2ff}
 .grid{display:grid;grid-template-columns:repeat(10,1fr);gap:5px}.qn{background:#e8edf2}.done{background:#b7e6c5}.cur{outline:3px solid #1769aa}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.stat{text-align:center;background:#f3f6f9;padding:12px;border-radius:8px}
@@ -34,7 +34,13 @@ table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px so
 </section>
 
 <section id="student" class="hide card">
-<h3>विद्यार्थी का नाम</h3><input id="name" placeholder="नाम">
+<h3>विद्यार्थी की जानकारी</h3>
+
+<input id="mobile" type="tel" maxlength="10" placeholder="Mobile Number">
+<input id="firstName" placeholder="First Name">
+<input id="lastName" placeholder="Last Name">
+<input id="age" type="number" min="1" max="100" placeholder="Age">
+
 <div id="tests"></div>
 </section>
 
@@ -95,9 +101,31 @@ async function student(){
 }
 
 function start(id){
- let n=$("name").value.trim();if(!n)return alert("नाम लिखें");
- test=tests.find(x=>x.id===id);idx=0;answers=Array(test.questions.length).fill(null);
- end=Date.now()+test.duration*60000;show("exam");draw();clock()
+ let mobile=$("mobile").value.trim();
+ let firstName=$("firstName").value.trim();
+ let lastName=$("lastName").value.trim();
+ let age=$("age").value.trim();
+
+ if(!/^[0-9]{10}$/.test(mobile))
+   return alert("कृपया 10 अंकों का Mobile Number डालें");
+
+ if(!firstName)
+   return alert("First Name लिखें");
+
+ if(!lastName)
+   return alert("Last Name लिखें");
+
+ if(!age || Number(age)<1 || Number(age)>100)
+   return alert("सही Age डालें");
+
+ test=tests.find(x=>x.id===id);
+ idx=0;
+ answers=Array(test.questions.length).fill(null);
+ end=Date.now()+test.duration*60000;
+ show("exam");
+ draw();
+ clock();
+}
 }
 function clock(){
  let s=Math.max(0,Math.ceil((end-Date.now())/1000));
