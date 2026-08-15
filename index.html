@@ -151,7 +151,7 @@ async function submitTest(auto=false){
  let score=c*4-w;
  let reviewData=test.questions.map((q,k)=>({user:answers[k],correctIndex:q.a,correct:answers[k]===q.a}));
  try{
-  let rows=await api("results","POST",{test_id:test.id,student_name:$("name").value,score,correct:c,wrong:w,skipped:s,answers,review:reviewData});
+ let rows=await api("results","POST",{test_id:test.id,student_name:$("firstName").value.trim()+" "+$("lastName").value.trim(),score,correct:c,wrong:w,skipped:s,answers,review:reviewData});
   lastResultId=rows[0].id;
   let ranks=await api("results","GET",null,"?select=id,score&test_id=eq."+test.id+"&order=score.desc,id.asc");
   let me=ranks.findIndex(x=>x.id===lastResultId)+1;
