@@ -521,24 +521,29 @@ function newTest(){
   $("adminBody").innerHTML=`
     <h3>नया 100 प्रश्न वाला Test</h3>
 
+    <label>Exam</label>
+    <select id="examType" onchange="updateAdminTiming()">
+      <option value="AIIMS">AIIMS CRE</option>
+      <option value="SSC MTS">SSC MTS</option>
+    </select>
+
     <label>Test का नाम</label>
     <input id="tname" value="AIIMS CRE-5 Mock Test 1">
 
-    <label>समय (मिनट)</label>
-    <input id="tdur" type="number" value="90">
+    <label>समय (auto)</label>
+    <input id="tdur" type="number" value="90" readonly>
+
+    <p id="adminExamInfo">AIIMS CRE: 5 Sections × 20 Questions × 18 मिनट • +4 / −1</p>
 
     <div class="importbox">
       <b>📥 Bulk Import</b>
       <p>JSON फ़ाइल चुनें। इससे 100 प्रश्न अपने-आप भरेंगे।</p>
 
-      <button
-        class="g"
-        onclick="document.getElementById('newJsonFile').click()">
+      <button class="g" onclick="document.getElementById('newJsonFile').click()">
         JSON फ़ाइल चुनें
       </button>
 
-      <input
-        id="newJsonFile"
+      <input id="newJsonFile"
         type="file"
         accept=".json,application/json"
         class="hide"
@@ -555,10 +560,7 @@ function newTest(){
   `;
 
   renderBuilder(
-    Array.from(
-      {length:100},
-      ()=>({q:"",o:["","","",""],a:0})
-    )
+    Array.from({length:100},()=>({q:"",o:["","","",""],a:0}))
   );
 }
 
@@ -623,14 +625,18 @@ function renderBuilder(qs){
 
 function setImportedExamName(name){
   const n=String(name||"").toLowerCase();
+  const typeEl=$("examType");
+  const durEl=$("tdur");
+  const infoEl=$("adminExamInfo");
+
   if(n.includes("ssc")||n.includes("mts")){
-    $("examType").value="SSC MTS";
-    $("tdur").value=60;
-    $("adminExamInfo").textContent="SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.25";
+    if(typeEl)typeEl.value="SSC MTS";
+    if(durEl)durEl.value=60;
+    if(infoEl)infoEl.textContent="SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.25";
   }else{
-    $("examType").value="AIIMS";
-    $("tdur").value=90;
-    $("adminExamInfo").textContent="AIIMS CRE: 5 Sections × 20 Questions × 18 मिनट • +4 / −1";
+    if(typeEl)typeEl.value="AIIMS";
+    if(durEl)durEl.value=90;
+    if(infoEl)infoEl.textContent="AIIMS CRE: 5 Sections × 20 Questions × 18 मिनट • +4 / −1";
   }
 }
 
@@ -643,10 +649,12 @@ function importIntoBuilder(ev){
       const d=JSON.parse(r.result);
       if(!d.questions||d.questions.length!==100)throw Error("फ़ाइल में 100 प्रश्न नहीं हैं");
       const importedName=d.name||"AIIMS CRE-5 Mock Test 1";
-      $("tname").value=importedName;
+      const tname=$("tname");
+      if(tname)tname.value=importedName;
       setImportedExamName(importedName);
       renderBuilder(d.questions);
-      $("importStatus").textContent=" ✅ 100 प्रश्न Import हो गए";
+      const status=$("importStatus");
+      if(status)status.textContent=" ✅ 100 प्रश्न Import हो गए";
     }catch(e){
       alert("JSON फ़ाइल सही नहीं है: "+e.message);
     }
@@ -668,10 +676,12 @@ function importJSON(ev){
 
       setTimeout(()=>{
         const importedName=d.name||"AIIMS CRE-5 Mock Test 1";
-        $("tname").value=importedName;
+        const tname=$("tname");
+        if(tname)tname.value=importedName;
         setImportedExamName(importedName);
         renderBuilder(d.questions);
-        $("importStatus").textContent=" ✅ 100 प्रश्न Import हो गए";
+        const status=$("importStatus");
+        if(status)status.textContent=" ✅ 100 प्रश्न Import हो गए";
       },50);
 
     }catch(e){
