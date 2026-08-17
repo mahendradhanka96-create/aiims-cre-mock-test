@@ -462,31 +462,33 @@ async function adminTests(){
 
       <button class="p" onclick="newTest()">+ नया Test जोड़ें</button>
 
-      <button class="g"
-        onclick="document.getElementById('jsonFile').click()">
-        📥 Bulk Import JSON
-      </button>
+      <div class="importbox">
+        <b>AIIMS CRE</b><br>
+        <button class="p" onclick="document.getElementById('aiimsJsonFile').click()">
+          📥 AIIMS JSON Import
+        </button>
+        <input id="aiimsJsonFile"
+          type="file"
+          accept=".json,application/json"
+          class="hide"
+          onchange="importExamJSON(event,'AIIMS')">
 
-      <button class="p"
-        onclick="document.getElementById('pdfFile').click()">
-        📄 Import PDF
-      </button>
+        <br>
 
-      <input
-        id="jsonFile"
-        type="file"
-        accept=".json,application/json"
-        class="hide"
-        onchange="importJSON(event)">
+        <b>SSC MTS</b><br>
+        <button class="g" onclick="document.getElementById('sscJsonFile').click()">
+          📥 SSC MTS JSON Import
+        </button>
+        <input id="sscJsonFile"
+          type="file"
+          accept=".json,application/json"
+          class="hide"
+          onchange="importExamJSON(event,'SSC MTS')">
 
-      <input
-        id="pdfFile"
-        type="file"
-        accept="application/pdf,.pdf"
-        class="hide"
-        onchange="importPDF(event)">
-
-      <p><small>PDF import text-based PDFs के लिए है। Scanned/image-only PDF में questions स्वतः नहीं निकल सकते।</small></p>
+        <p id="adminImportHint">
+          AIIMS की file AIIMS में और SSC MTS की file SSC MTS में जाएगी।
+        </p>
+      </div>
 
       <div id="testList">
         ${r.map(t=>`
@@ -495,14 +497,12 @@ async function adminTests(){
             ${t.published?"Published":"Draft"}<br>
             ${t.questions?.length||0} प्रश्न • ${t.duration} मिनट<br>
 
-            <button
-              class="l"
+            <button class="l"
               onclick="toggle(${t.id},${!t.published})">
               ${t.published?"Unpublish":"Publish"}
             </button>
 
-            <button
-              class="d"
+            <button class="d"
               onclick="deleteTest(${t.id})">
               Delete
             </button>
@@ -510,7 +510,6 @@ async function adminTests(){
         `).join("")}
       </div>
     `;
-
   }catch(e){
     console.error(e);
     $("adminBody").innerHTML="Supabase setup/RLS पूरा करें।";
@@ -638,6 +637,53 @@ function setImportedExamName(name){
     if(durEl)durEl.value=90;
     if(infoEl)infoEl.textContent="AIIMS CRE: 5 Sections × 20 Questions × 18 मिनट • +4 / −1";
   }
+}
+
+
+function importExamJSON(ev, examType){
+  const f=ev.target.files[0];
+  if(!f)return;
+
+  const r=new FileReader();
+
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+
+      if(!d.questions || d.questions.length!==100)
+        throw Error("100 प्रश्न आवश्यक हैं");
+
+      newTest();
+
+      setTimeout(()=>{
+        $("examType").value=examType;
+
+        if(examType==="SSC MTS"){
+          $("tname").value=d.name||"SSC MTS Mock Test 1";
+          $("tdur").value=60;
+          $("adminExamInfo").textContent=
+            "SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.25";
+        }else{
+          $("tname").value=d.name||"AIIMS CRE-5 Mock Test 1";
+          $("tdur").value=90;
+          $("adminExamInfo").textContent=
+            "AIIMS CRE: 5 Sections × 20 Questions × 18 मिनट • +4 / −1";
+        }
+
+        renderBuilder(d.questions);
+
+        if($("importStatus")){
+          $("importStatus").textContent=
+            " ✅ "+examType+" के 100 प्रश्न Import हो गए";
+        }
+      },50);
+
+    }catch(e){
+      alert(examType+" JSON Import नहीं हुआ: "+e.message);
+    }
+  };
+
+  r.readAsText(f);
 }
 
 function importIntoBuilder(ev){
