@@ -139,7 +139,7 @@ const ADMIN_CODE="8890";
 
 const EXAM_CONFIGS={
   "AIIMS":{title:"AIIMS CRE",sections:5,questionsPerSection:20,sectionSeconds:18*60,correctMarks:4,wrongMarks:-1,totalMarks:400},
-  "SSC MTS":{title:"SSC MTS",sections:4,questionsPerSection:25,sectionSeconds:15*60,correctMarks:2,wrongMarks:-0.25,totalMarks:200}
+  "SSC MTS":{title:"SSC MTS",sections:4,questionsPerSection:25,sectionSeconds:15*60,correctMarks:2,wrongMarks:-0.50,totalMarks:200}
 };
 let selectedExam="AIIMS";
 let examConfig=EXAM_CONFIGS.AIIMS;
@@ -380,7 +380,7 @@ async function submitTest(auto=false){
     else w++;
   });
 
-  const score=c*examConfig.correctMarks+w*examConfig.wrongMarks;
+  const score=Number((c*examConfig.correctMarks+w*examConfig.wrongMarks).toFixed(2));
   const reviewData=test.questions.map((q,k)=>({
     user:answers[k],correctIndex:q.a,correct:answers[k]===q.a
   }));
@@ -424,7 +424,7 @@ async function submitTest(auto=false){
   }catch(e){
     submitted=false;
     console.error(e);
-    alert("Result save नहीं हुआ। Supabase setup/RLS जाँचें।");
+    alert("Result save नहीं हुआ: "+(e?.message||e));
   }
 }
 
@@ -568,7 +568,7 @@ function updateAdminTiming(){
   if(type==="SSC MTS"){
     $("tname").value="SSC MTS Mock Test 1";
     $("tdur").value=60;
-    $("adminExamInfo").textContent="SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.25";
+    $("adminExamInfo").textContent="SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.50";
   }else{
     $("tname").value="AIIMS CRE-5 Mock Test 1";
     $("tdur").value=90;
@@ -631,7 +631,7 @@ function setImportedExamName(name){
   if(n.includes("ssc")||n.includes("mts")){
     if(typeEl)typeEl.value="SSC MTS";
     if(durEl)durEl.value=60;
-    if(infoEl)infoEl.textContent="SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.25";
+    if(infoEl)infoEl.textContent="SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.50";
   }else{
     if(typeEl)typeEl.value="AIIMS";
     if(durEl)durEl.value=90;
@@ -662,7 +662,7 @@ function importExamJSON(ev, examType){
           $("tname").value=d.name||"SSC MTS Mock Test 1";
           $("tdur").value=60;
           $("adminExamInfo").textContent=
-            "SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.25";
+            "SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.50";
         }else{
           $("tname").value=d.name||"AIIMS CRE-5 Mock Test 1";
           $("tdur").value=90;
