@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#123b6d">
 <link rel="icon" type="image/png" href="./icon-512.png">
-<title>AIIMS CRE Mock Test</title>
+<title>AIIMS CRE / SSC MTS Mock Test</title>
 <style>
 body{margin:0;font-family:Arial,sans-serif;background:#eef3f8;color:#172033}
 header{background:#123b6d;color:#fff;padding:14px;display:flex;justify-content:space-between;align-items:center}
-.wrap{max-width:1050px;margin:auto;padding:12px}
+.wrap{max-width:1100px;margin:auto;padding:12px}
 .card{background:#fff;padding:16px;border-radius:14px;margin:10px 0;box-shadow:0 2px 12px #0001}
 button{border:0;border-radius:8px;padding:10px 14px;margin:4px;cursor:pointer}
 button:disabled{cursor:not-allowed;opacity:.55}
@@ -24,7 +24,9 @@ input,textarea,select{padding:10px;width:100%;box-sizing:border-box;margin:5px 0
 .stat{text-align:center;background:#f3f6f9;padding:12px;border-radius:8px}
 .right{background:#e8f7ed;padding:10px;border-radius:8px;margin:8px 0}
 .wrong{background:#fff0f0;padding:10px;border-radius:8px;margin:8px 0}
-table{width:100%;border-collapse:collapse}
+.info{background:#eef7ff;padding:10px;border-radius:8px;margin:8px 0}
+.tableWrap{overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:760px}
 td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 .qedit{border:1px solid #d8e0e8;border-radius:10px;padding:10px;margin:8px 0}
 .qedit h4{margin:0 0 5px}
@@ -34,17 +36,33 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 .sectionPill.active{outline:3px solid #1769aa;font-weight:bold}
 .sectionPill.done{background:#b7e6c5}
 .lockNote{background:#fff8e1;padding:10px;border-radius:8px;margin:8px 0}
-@media(max-width:600px){
-.grid{grid-template-columns:repeat(5,1fr)}
-.stats{grid-template-columns:repeat(2,1fr)}
-.sectionPill{font-size:12px;padding:7px 8px}
+.scoreCard{border:2px solid #1769aa;border-radius:14px;padding:16px;background:#fff}
+.scoreCard .headline{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.scoreBig{font-size:34px;font-weight:700}
+.miniGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.mini{background:#f3f6f9;padding:10px;border-radius:8px;text-align:center}
+.badge{display:inline-block;padding:5px 8px;border-radius:999px;background:#e8edf3;font-size:12px}
+.historyCard{border-left:5px solid #1769aa}
+.actions{display:flex;flex-wrap:wrap;gap:6px}
+@media(max-width:700px){
+ .grid{grid-template-columns:repeat(5,1fr)}
+ .stats{grid-template-columns:repeat(2,1fr)}
+ .miniGrid{grid-template-columns:repeat(2,1fr)}
+ .sectionPill{font-size:12px;padding:7px 8px}
+}
+@media print{
+ body{background:#fff}
+ header,.noPrint,.actions,button{display:none!important}
+ .wrap{max-width:none;padding:0}
+ .card{box-shadow:none}
+ .scoreCard{border:1px solid #000}
 }
 </style>
 </head>
 <body>
 
 <header>
-  <b>AIIMS CRE Mock Test</b>
+  <b>AIIMS CRE / SSC MTS Mock Test</b>
   <span id="timer">18:00</span>
 </header>
 
@@ -62,16 +80,20 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 <section id="student" class="hide card">
   <h3 id="studentExamTitle">विद्यार्थी की जानकारी</h3>
 
-  <input id="mobile" type="tel" maxlength="10" inputmode="numeric" placeholder="Mobile Number">
+  <input id="mobile" type="tel" maxlength="10" inputmode="numeric"
+         placeholder="Mobile Number" oninput="debouncedLoadStudent()">
   <input id="firstName" placeholder="First Name">
   <input id="lastName" placeholder="Last Name">
-  <input id="age" type="number" min="1" max="100" placeholder="Age">
+
+  <div class="actions">
+    <button class="l" onclick="loadStudentPanel()">↻ Tests / Score Cards Refresh</button>
+  </div>
 
   <div id="tests"></div>
+  <div id="myScoreCards"></div>
 </section>
 
 <section id="exam" class="hide">
-
   <div class="card">
     <div class="sectionBar" id="sectionBar"></div>
     <div id="sectionInfo" class="lockNote"></div>
@@ -92,19 +114,22 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
     <b>इस Section के प्रश्न</b>
     <div id="qgrid" class="grid"></div>
   </div>
-
 </section>
 
 <section id="result" class="hide">
   <div class="card">
     <h2>परिणाम</h2>
     <div class="stats">
-      <div class="stat"><b id="score"></b><br>अंक / 400</div>
+      <div class="stat"><b id="score"></b><br><span id="scoreLabel">अंक</span></div>
       <div class="stat"><b id="correct"></b><br>सही</div>
       <div class="stat"><b id="wrong"></b><br>गलत</div>
       <div class="stat"><b id="skipped"></b><br>छोड़े</div>
     </div>
     <h3 id="rank"></h3>
+  </div>
+
+  <div class="card">
+    <div id="scoreCardMount"></div>
   </div>
 
   <div class="card">
@@ -120,7 +145,7 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 </section>
 
 <section id="admin" class="hide">
-  <div class="card">
+  <div class="card noPrint">
     <h2>Owner / Admin</h2>
     <button class="p" onclick="adminTests()">Tests</button>
     <button class="l" onclick="adminResults()">सभी Results / Rank</button>
@@ -138,15 +163,40 @@ const SUPABASE_ANON_KEY="sb_publishable_Rfvy1drDWb-fXgP37UdEAw_QWg0X_cu";
 const ADMIN_CODE="8890";
 
 const EXAM_CONFIGS={
-  "AIIMS":{title:"AIIMS CRE",sections:5,questionsPerSection:20,sectionSeconds:18*60,correctMarks:4,wrongMarks:-1,totalMarks:400},
-  "SSC MTS":{title:"SSC MTS",sections:4,questionsPerSection:25,sectionSeconds:15*60,correctMarks:2,wrongMarks:-0.50,totalMarks:200}
+  "AIIMS":{
+    title:"AIIMS CRE",
+    examType:"AIIMS",
+    sections:[
+      {name:"Maths",count:35,minutes:18},
+      {name:"English",count:35,minutes:18},
+      {name:"CCS Rules",count:10,minutes:18},
+      {name:"Computer",count:10,minutes:18},
+      {name:"Current GK",count:10,minutes:18}
+    ],
+    correctMarks:4,
+    wrongMarks:-1,
+    totalMarks:400
+  },
+  "SSC MTS":{
+    title:"SSC MTS",
+    examType:"SSC MTS",
+    sections:[
+      {name:"General Intelligence",count:25,minutes:15},
+      {name:"General Awareness",count:25,minutes:15},
+      {name:"Quantitative Aptitude",count:25,minutes:15},
+      {name:"English Language",count:25,minutes:15}
+    ],
+    correctMarks:2,
+    wrongMarks:-0.50,
+    totalMarks:200
+  }
 };
+
 let selectedExam="AIIMS";
 let examConfig=EXAM_CONFIGS.AIIMS;
-const TOTAL_QUESTIONS=100;
-
-let tests=[],test=null,idx=0,answers=[],lastResultId=null;
+let tests=[],test=null,idx=0,answers=[],lastResultId=null,lastResultData=null;
 let sectionIndex=0,sectionEnd=0,sectionTimerRunning=false,submitted=false;
+let loadTimer=null;
 
 const $=x=>document.getElementById(x);
 
@@ -163,9 +213,7 @@ async function api(t,m="GET",b=null,q=""){
     "Prefer":"return=representation"
   };
   const r=await fetch(SUPABASE_URL+"/rest/v1/"+t+q,{
-    method:m,
-    headers:h,
-    body:b?JSON.stringify(b):null
+    method:m,headers:h,body:b?JSON.stringify(b):null
   });
   if(!r.ok)throw Error(await r.text());
   return r.status===204?null:r.json();
@@ -180,185 +228,281 @@ function chooseExam(type){
 async function student(){
   show("student");
   $("studentExamTitle").textContent=examConfig.title+" — विद्यार्थी की जानकारी";
+  await loadStudentPanel();
+}
+
+function debouncedLoadStudent(){
+  clearTimeout(loadTimer);
+  loadTimer=setTimeout(()=>{
+    if(/^[0-9]{10}$/.test($("mobile").value.trim())) loadStudentPanel();
+  },500);
+}
+
+async function loadStudentPanel(){
   try{
-    tests=await api("tests","GET",null,"?select=id,name,duration,questions&published=eq.true&order=id.desc");
-    const filtered=tests.filter(t=>{
-      const n=String(t.name||"").toLowerCase();
-      return selectedExam==="AIIMS"
-        ? n.includes("aiims")
-        : (n.includes("ssc")||n.includes("mts"));
+    const q="?select=id,name,duration,questions,published,exam_type&published=eq.true&exam_type=eq."+encodeURIComponent(selectedExam)+"&order=id.desc";
+    const all=await api("tests","GET",null,q);
+    tests=(all||[]).map(normalizeTest);
+
+    const mobile=$("mobile").value.trim();
+    let completed=[];
+    if(/^[0-9]{10}$/.test(mobile)){
+      completed=await api("results","GET",null,
+        "?select=id,test_id,exam_type,student_name,mobile,score,correct,wrong,skipped,created_at&mobile=eq."+encodeURIComponent(mobile)+"&exam_type=eq."+encodeURIComponent(selectedExam)+"&order=created_at.desc"
+      ) || [];
+    }
+
+    const byTest={};
+    completed.forEach(r=>{
+      (byTest[r.test_id] ||= []).push(r);
     });
-    $("tests").innerHTML=filtered.map(t=>`
-      <div class="card">
-        <b>${esc(t.name)}</b><br>
-        ${Array.isArray(t.questions)?t.questions.length:0} प्रश्न<br>
-        ${examConfig.sections} Sections • ${examConfig.questionsPerSection} प्रश्न/Section • ${examConfig.sectionSeconds/60} मिनट/Section<br>
-        सही ${examConfig.correctMarks>0?"+":""}${examConfig.correctMarks} • गलत ${examConfig.wrongMarks} • कुल ${examConfig.totalMarks} अंक<br>
-        <button class="p" onclick="start(${t.id})">Test शुरू करें</button>
-      </div>
-    `).join("")||"<p>इस Exam का कोई Published Test नहीं है।</p>";
+
+    $("tests").innerHTML=tests.map(t=>{
+      const attempts=byTest[t.id]||[];
+      const latest=attempts[0];
+      return `
+        <div class="card historyCard">
+          <b>${esc(t.name)}</b><br>
+          ${t.questions.length} प्रश्न • ${examConfig.sections.length} Sections • ${examConfig.sections.reduce((a,s)=>a+s.minutes,0)} मिनट कुल<br>
+          सही +${examConfig.correctMarks} • गलत ${examConfig.wrongMarks} • अधिकतम ${examConfig.totalMarks} अंक
+          ${latest ? `
+            <div class="right">
+              ✅ <b>यह Test पहले दिया जा चुका है</b><br>
+              नवीनतम Score: <b>${formatScore(latest.score)}</b> / ${examConfig.totalMarks}
+              • ${attempts.length} Attempt
+            </div>
+            <button class="p" onclick="start(${t.id})">↻ फिर से Test दें</button>
+          ` : `
+            <br><button class="p" onclick="start(${t.id})">▶️ Test शुरू करें</button>
+          `}
+        </div>
+      `;
+    }).join("") || "<p>इस Exam का कोई Published Test नहीं है।</p>";
+
+    await renderMyScoreCards(completed);
   }catch(e){
-    console.error(e);
-    $("tests").innerHTML="<p>Test लोड नहीं हो पाए। Supabase setup/RLS जाँचें।</p>";
+    console.error("STUDENT PANEL ERROR:",e);
+    $("tests").innerHTML="<p>Test लोड नहीं हो पाए: "+esc(e.message||e)+"</p>";
+    $("myScoreCards").innerHTML="";
   }
+}
+
+async function renderMyScoreCards(results){
+  if(!results.length){
+    $("myScoreCards").innerHTML="";
+    return;
+  }
+
+  const testIds=[...new Set(results.map(r=>r.test_id))];
+  const testMap={};
+  tests.forEach(t=>testMap[t.id]=t);
+
+  for(const id of testIds){
+    if(!testMap[id]){
+      try{
+        const one=await api("tests","GET",null,"?select=id,name,questions,duration,exam_type&id=eq."+id);
+        if(one[0])testMap[id]=normalizeTest(one[0]);
+      }catch(e){console.error(e)}
+    }
+  }
+
+  $("myScoreCards").innerHTML=
+    `<div class="card">
+      <h3>📊 मेरे Score Cards</h3>
+      <p>हर submission का अलग card यहाँ रहेगा।</p>
+      ${results.map(r=>{
+        const t=testMap[r.test_id];
+        return `<div class="card">
+          ${renderScoreCardHTML(r,t,false)}
+        </div>`;
+      }).join("")}
+    </div>`;
+}
+
+function renderScoreCardHTML(r,t,withButton=true){
+  const cfg=t ? EXAM_CONFIGS[t.exam_type] : examConfig;
+  const title=t ? t.name : (r.exam_type||selectedExam);
+  return `
+    <div class="scoreCard" id="score-card-${r.id}">
+      <div class="headline">
+        <div>
+          <div class="badge">${esc(r.exam_type||selectedExam)}</div>
+          <h2 style="margin:6px 0">${esc(title)}</h2>
+          <div><b>${esc(r.student_name||"")}</b> • ${esc(r.mobile||"")}</div>
+          <div>${formatDate(r.created_at)}</div>
+        </div>
+        <div class="scoreBig">${formatScore(r.score)} / ${cfg.totalMarks}</div>
+      </div>
+      <div class="miniGrid">
+        <div class="mini"><b>${Number(r.correct)||0}</b><br>सही</div>
+        <div class="mini"><b>${Number(r.wrong)||0}</b><br>गलत</div>
+        <div class="mini"><b>${Number(r.skipped)||0}</b><br>छोड़े</div>
+        <div class="mini"><b>${(Number(r.correct)||0)+(Number(r.wrong)||0)}</b><br>Attempted</div>
+      </div>
+      <div id="rank-${r.id}" class="info">Rank: गणना हो रही है...</div>
+      ${withButton?`<div class="actions noPrint"><button class="g" onclick="downloadScoreCard(${r.id})">📥 Score Card Download</button></div>`:""}
+    </div>
+  `;
+}
+
+async function fillRankForCard(r){
+  try{
+    const rows=await api("results","GET",null,
+      "?select=id,score&test_id=eq."+r.test_id+"&order=score.desc,id.asc"
+    );
+    const rank=rows.findIndex(x=>String(x.id)===String(r.id))+1;
+    const el=$("rank-"+r.id);
+    if(el) el.innerHTML=`🏆 Rank: <b>${rank>0?rank:"—"}</b>`;
+  }catch(e){
+    const el=$("rank-"+r.id);
+    if(el)el.textContent="Rank उपलब्ध नहीं";
+  }
+}
+
+function normalizeTest(t){
+  const qs=normalizeQuestions(t.questions||[]);
+  return {...t,questions:qs,exam_type:t.exam_type||detectExamType(t.name)};
+}
+
+function detectExamType(name){
+  return /ssc|mts/i.test(String(name||"")) ? "SSC MTS" : "AIIMS";
+}
+
+function normalizeQuestions(arr){
+  return (arr||[]).map((q,i)=>{
+    let options=q.o;
+    if(!Array.isArray(options)) options=q.options;
+    options=Array.isArray(options)?options.slice(0,4):["","","",""];
+
+    let answer=q.a;
+    if(answer===undefined) answer=q.correctAnswer;
+    if(typeof answer==="string"){
+      const s=answer.trim().toUpperCase();
+      if(/^[ABCD]$/.test(s)) answer=s.charCodeAt(0)-65;
+      else if(/^\d+$/.test(s)) answer=Number(s);
+    }
+    answer=Number(answer);
+    if(!Number.isInteger(answer)||answer<0||answer>3) answer=0;
+
+    return {
+      q:String(q.q??q.question??""),
+      o:options.map(x=>String(x??"")),
+      a:answer,
+      section:q.section||q.sectionName||""
+    };
+  });
 }
 
 function start(id){
   const mobile=$("mobile").value.trim();
-  const firstName=$("firstName").value.trim();
-  const lastName=$("lastName").value.trim();
-  const age=$("age").value.trim();
+  const first=$("firstName").value.trim();
+  const last=$("lastName").value.trim();
 
   if(!/^[0-9]{10}$/.test(mobile)) return alert("कृपया 10 अंकों का Mobile Number डालें");
-  if(!firstName) return alert("First Name लिखें");
-  if(!lastName) return alert("Last Name लिखें");
-  if(!age||Number(age)<1||Number(age)>100) return alert("सही Age डालें");
+  if(!first) return alert("First Name लिखें");
+  if(!last) return alert("Last Name लिखें");
 
-  test=tests.find(x=>x.id===id);
-  if(!test||!Array.isArray(test.questions)||test.questions.length!==TOTAL_QUESTIONS)
-    return alert("यह Test 100 प्रश्न वाला सही Test नहीं है।");
+  test=tests.find(x=>String(x.id)===String(id));
+  if(!test||test.questions.length!==100)return alert("यह Test 100 प्रश्न वाला सही Test नहीं है।");
 
   idx=0;
-  answers=Array(TOTAL_QUESTIONS).fill(null);
+  answers=Array(100).fill(null);
   sectionIndex=0;
   submitted=false;
   lastResultId=null;
+  lastResultData=null;
   startSectionTimer();
   show("exam");
   draw();
 }
 
 function startSectionTimer(){
-  sectionEnd=Date.now()+examConfig.sectionSeconds*1000;
+  sectionEnd=Date.now()+examConfig.sections[sectionIndex].minutes*60*1000;
   sectionTimerRunning=true;
   updateTimerDisplay();
-
   setTimeout(tickSectionTimer,250);
 }
 
 function tickSectionTimer(){
-  if(!sectionTimerRunning || submitted)return;
-
+  if(!sectionTimerRunning||submitted)return;
   const remaining=Math.max(0,Math.ceil((sectionEnd-Date.now())/1000));
-
   updateTimerDisplay(remaining);
-
   if(remaining<=0){
     sectionTimerRunning=false;
     moveToNextSectionOrSubmit(true);
     return;
   }
-
   setTimeout(tickSectionTimer,250);
 }
 
 function updateTimerDisplay(seconds){
-  const s = seconds===undefined
-    ? Math.max(0,Math.ceil((sectionEnd-Date.now())/1000))
-    : seconds;
-
-  $("timer").textContent=
-    String(Math.floor(s/60)).padStart(2,"0")+":"+
-    String(s%60).padStart(2,"0");
+  const s=seconds===undefined?Math.max(0,Math.ceil((sectionEnd-Date.now())/1000)):seconds;
+  $("timer").textContent=String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");
 }
 
 function sectionStart(){
-  return sectionIndex*examConfig.questionsPerSection;
+  let n=0;
+  for(let i=0;i<sectionIndex;i++)n+=examConfig.sections[i].count;
+  return n;
 }
+
 function sectionEndIndex(){
-  return sectionStart()+examConfig.questionsPerSection-1;
+  return sectionStart()+examConfig.sections[sectionIndex].count-1;
 }
+
 function sectionName(i){
-  return String.fromCharCode(65+i);
+  return examConfig.sections[i]?.name || `Section ${String.fromCharCode(65+i)}`;
 }
 
 function draw(){
   if(!test)return;
-  const start=sectionStart();
-  const end=sectionEndIndex();
-  const q=test.questions[idx];
-
-  $("num").textContent=`प्रश्न ${idx+1}/${TOTAL_QUESTIONS} • Section ${sectionName(sectionIndex)}`;
-  $("count").textContent=`इस Section में उत्तर दिए: ${answers.slice(start,end+1).filter(x=>x!==null).length}/${examConfig.questionsPerSection}`;
+  const start=sectionStart(),end=sectionEndIndex(),q=test.questions[idx];
+  $("num").textContent=`प्रश्न ${idx+1}/100 • ${sectionName(sectionIndex)}`;
+  $("count").textContent=`उत्तर दिए: ${answers.slice(start,end+1).filter(x=>x!==null).length}/${examConfig.sections[sectionIndex].count}`;
   $("question").textContent=q.q;
-
-  $("options").innerHTML=q.o.map((v,j)=>`
-    <button class="${answers[idx]===j?"sel":""}" onclick="selectAnswer(${j})">
-      ${"ABCD"[j]}. ${esc(v)}
-    </button>
-  `).join("");
-
-  $("qgrid").innerHTML=Array.from(
-    {length:examConfig.questionsPerSection},
-    (_,k)=>{
-      const gi=start+k;
-      return `<button class="qn ${answers[gi]!==null?"done ":""} ${gi===idx?"cur":""}" onclick="jumpQuestion(${gi})">${gi+1}</button>`;
-    }
+  $("options").innerHTML=q.o.map((v,j)=>
+    `<button class="${answers[idx]===j?"sel":""}" onclick="selectAnswer(${j})">${"ABCD"[j]}. ${esc(v)}</button>`
   ).join("");
+
+  $("qgrid").innerHTML=Array.from({length:examConfig.sections[sectionIndex].count},(_,k)=>{
+    const gi=start+k;
+    return `<button class="qn ${answers[gi]!==null?"done ":""} ${gi===idx?"cur":""}" onclick="jumpQuestion(${gi})">${gi+1}</button>`;
+  }).join("");
 
   $("prevBtn").disabled=idx<=start;
   $("nextBtn").disabled=idx>=end;
-  $("submitBtn").disabled=sectionIndex!==examConfig.sections-1;
+  $("submitBtn").disabled=sectionIndex!==examConfig.sections.length-1;
 
   $("sectionInfo").textContent=
-    sectionIndex<examConfig.sections-1
-    ? `Section ${sectionName(sectionIndex)}: प्रश्न ${start+1}–${end+1}. समय पूरा होने पर Section ${sectionName(sectionIndex+1)} अपने-आप खुलेगा। पिछला Section दोबारा नहीं खोला जा सकेगा।`
-    : `Section ${sectionName(sectionIndex)}: प्रश्न ${start+1}–${end+1}. यह आखिरी Section है। समय पूरा होने पर Test अपने-आप Submit होगा।`;
+    sectionIndex<examConfig.sections.length-1
+    ? `${sectionName(sectionIndex)}: ${examConfig.sections[sectionIndex].count} प्रश्न। समय पूरा होने पर अगला Section खुलेगा। पिछला Section लॉक रहेगा।`
+    : `${sectionName(sectionIndex)}: ${examConfig.sections[sectionIndex].count} प्रश्न। समय पूरा होने पर Test अपने-आप Submit होगा।`;
 
   renderSectionBar();
 }
 
 function renderSectionBar(){
-  $("sectionBar").innerHTML=Array.from({length:examConfig.sections},(_,i)=>{
+  $("sectionBar").innerHTML=examConfig.sections.map((s,i)=>{
     let cls="sectionPill";
     if(i===sectionIndex)cls+=" active";
     if(i<sectionIndex)cls+=" done";
-    return `<span class="${cls}">Section ${sectionName(i)} ${i<sectionIndex?"✓":""}</span>`;
+    return `<span class="${cls}">${esc(s.name)} ${i<sectionIndex?"✓":""}</span>`;
   }).join("");
 }
 
-function selectAnswer(j){
-  if(idx<sectionStart() || idx>sectionEndIndex())return;
-  answers[idx]=j;
-  draw();
-}
-
-function jumpQuestion(globalIndex){
-  if(globalIndex<sectionStart() || globalIndex>sectionEndIndex())return;
-  idx=globalIndex;
-  draw();
-}
-
-function next(){
-  const end=sectionEndIndex();
-  if(idx<end){
-    idx++;
-    draw();
-  }
-}
-
-function prev(){
-  const start=sectionStart();
-  if(idx>start){
-    idx--;
-    draw();
-  }
-}
-
-function clearAnswer(){
-  answers[idx]=null;
-  draw();
-}
+function selectAnswer(j){ if(idx>=sectionStart()&&idx<=sectionEndIndex()){answers[idx]=j;draw()} }
+function jumpQuestion(globalIndex){ if(globalIndex>=sectionStart()&&globalIndex<=sectionEndIndex()){idx=globalIndex;draw()} }
+function next(){if(idx<sectionEndIndex()){idx++;draw()}}
+function prev(){if(idx>sectionStart()){idx--;draw()}}
+function clearAnswer(){answers[idx]=null;draw()}
 
 function moveToNextSectionOrSubmit(auto=true){
-  if(sectionIndex<examConfig.sections-1){
+  if(sectionIndex<examConfig.sections.length-1){
     sectionIndex++;
     idx=sectionStart();
     startSectionTimer();
     draw();
-    if(auto){
-      alert(`Section ${sectionName(sectionIndex-1)} का समय पूरा हो गया। अब Section ${sectionName(sectionIndex)} शुरू हो गया है। पिछला Section लॉक है।`);
-    }
+    if(auto)alert(`${sectionName(sectionIndex-1)} का समय पूरा हो गया। अब ${sectionName(sectionIndex)} शुरू हो गया है।`);
   }else{
     submitTest(true);
   }
@@ -366,8 +510,7 @@ function moveToNextSectionOrSubmit(auto=true){
 
 async function submitTest(auto=false){
   if(submitted)return;
-  if(sectionIndex!==examConfig.sections-1)
-    return alert("आखिरी Section पूरा होने के बाद ही Test Submit होगा।");
+  if(sectionIndex!==examConfig.sections.length-1)return alert("आखिरी Section पूरा होने के बाद ही Test Submit होगा।");
   if(!auto&&!confirm("क्या पूरा Test Submit करना है?"))return;
 
   submitted=true;
@@ -382,383 +525,294 @@ async function submitTest(auto=false){
 
   const score=Number((c*examConfig.correctMarks+w*examConfig.wrongMarks).toFixed(2));
   const reviewData=test.questions.map((q,k)=>({
-    user:answers[k],correctIndex:q.a,correct:answers[k]===q.a
+    user:answers[k],
+    correctIndex:q.a,
+    correct:answers[k]===q.a
   }));
 
   try{
     const rows=await api("results","POST",{
       test_id:test.id,
+      exam_type:selectedExam,
       student_name:$("firstName").value.trim()+" "+$("lastName").value.trim(),
       mobile:$("mobile").value.trim(),
-      age:Number($("age").value),
       score,correct:c,wrong:w,skipped:s,answers,review:reviewData
     });
 
     lastResultId=rows[0].id;
 
     const ranks=await api("results","GET",null,
-      "?select=id,score&test_id=eq."+test.id+"&order=score.desc,id.asc");
-
+      "?select=id,score&test_id=eq."+test.id+"&order=score.desc,id.asc"
+    );
     const me=ranks.findIndex(x=>String(x.id)===String(lastResultId))+1;
+
+    lastResultData={
+      ...rows[0],
+      test_id:test.id,
+      exam_type:selectedExam,
+      student_name:$("firstName").value.trim()+" "+$("lastName").value.trim(),
+      mobile:$("mobile").value.trim(),
+      score,correct:c,wrong:w,skipped:s,
+      created_at:rows[0].created_at||new Date().toISOString()
+    };
+
     show("result");
-    $("score").textContent=Number.isInteger(score)?score:score.toFixed(2);
+    $("score").textContent=formatScore(score);
+    $("scoreLabel").textContent=`अंक / ${examConfig.totalMarks}`;
     $("correct").textContent=c;
     $("wrong").textContent=w;
     $("skipped").textContent=s;
-    $("rank").textContent="आपकी Rank: "+(me>0?me:"—");
+    $("rank").textContent="🏆 आपकी Rank: "+(me>0?me:"—");
+
+    $("scoreCardMount").innerHTML=renderScoreCardHTML(lastResultData,test,true);
+    $("rank-"+lastResultData.id).innerHTML=`🏆 Rank: <b>${me>0?me:"—"}</b>`;
 
     $("review").innerHTML=
-      `<p><b>${esc(examConfig.title)}</b> • कुल ${examConfig.totalMarks} अंक</p>`+
+      `<p><b>${esc(examConfig.title)}</b> • ${esc(test.name)} • ${formatScore(score)} / ${examConfig.totalMarks}</p>`+
       test.questions.map((q,k)=>`
         <div class="${answers[k]===q.a?"right":"wrong"}">
           <b>Q${k+1}. ${esc(q.q)}</b><br>
-          विद्यार्थी ने चुना: <b>${answers[k]===null?"कोई उत्तर नहीं":"ABCD"[answers[k]]+". "+esc(q.o[answers[k]])}</b><br>
-          सही उत्तर: <b>${"ABCD"[q.a]}. ${esc(q.o[q.a])}</b><br>
-          ${answers[k]===q.a
-            ?`✅ सही (+${examConfig.correctMarks})`
-            :answers[k]===null
-            ?"0 अंक"
-            :`❌ गलत (${examConfig.wrongMarks})`}
+          विद्यार्थी ने चुना:
+          <b>${answers[k]===null?"कोई उत्तर नहीं":"ABCD"[answers[k]]+". "+esc(q.o[answers[k]])}</b><br>
+          सही उत्तर:
+          <b>${"ABCD"[q.a]}. ${esc(q.o[q.a])}</b><br>
+          ${answers[k]===q.a?`✅ सही (+${examConfig.correctMarks})`:answers[k]===null?"0 अंक":`❌ गलत (${examConfig.wrongMarks})`}
         </div>
       `).join("");
+
   }catch(e){
     submitted=false;
-    console.error(e);
+    console.error("RESULT SAVE ERROR:",e);
     alert("Result save नहीं हुआ: "+(e?.message||e));
+  }
+}
+
+async function downloadScoreCard(resultId){
+  try{
+    let r=null,t=null;
+    if(lastResultData&&String(lastResultData.id)===String(resultId)){
+      r=lastResultData;t=test;
+    }else{
+      const rr=await api("results","GET",null,"?select=*&id=eq."+resultId);
+      r=rr[0];
+      const tt=await api("tests","GET",null,"?select=id,name,exam_type,questions&id=eq."+r.test_id);
+      t=tt[0]?normalizeTest(tt[0]):null;
+    }
+    if(!r)return alert("Score Card नहीं मिला।");
+
+    const cfg=t?EXAM_CONFIGS[t.exam_type]:EXAM_CONFIGS[r.exam_type||selectedExam];
+    const ranks=await api("results","GET",null,"?select=id,score&test_id=eq."+r.test_id+"&order=score.desc,id.asc");
+    const rank=ranks.findIndex(x=>String(x.id)===String(r.id))+1;
+
+    const w=window.open("","_blank");
+    if(!w)return alert("Popup blocked है। Browser में pop-up allow करें।");
+    w.document.write(`
+      <html><head><title>Score Card</title>
+      <style>
+      body{font-family:Arial;padding:30px;background:#f5f7fa}
+      .card{max-width:720px;margin:auto;background:#fff;border:2px solid #1769aa;border-radius:16px;padding:24px}
+      .top{display:flex;justify-content:space-between;gap:20px}
+      .score{font-size:40px;font-weight:700}
+      table{width:100%;border-collapse:collapse;margin-top:20px}
+      td{padding:10px;border-bottom:1px solid #ddd}
+      @media print{button{display:none}}
+      </style></head><body>
+      <div class="card">
+        <h1>${esc(cfg.title)}</h1>
+        <h2>${esc(t?.name||"Mock Test")}</h2>
+        <p><b>Name:</b> ${esc(r.student_name||"")}</p>
+        <p><b>Mobile:</b> ${esc(r.mobile||"")}</p>
+        <p><b>Date:</b> ${formatDate(r.created_at)}</p>
+        <div class="top">
+          <div class="score">${formatScore(r.score)} / ${cfg.totalMarks}</div>
+          <div><h2>Rank: ${rank>0?rank:"—"}</h2></div>
+        </div>
+        <table>
+          <tr><td>Correct</td><td>${r.correct}</td></tr>
+          <tr><td>Wrong</td><td>${r.wrong}</td></tr>
+          <tr><td>Skipped</td><td>${r.skipped}</td></tr>
+          <tr><td>Attempted</td><td>${(Number(r.correct)||0)+(Number(r.wrong)||0)}</td></tr>
+        </table>
+        <br><button onclick="window.print()">Print / Save PDF</button>
+      </div></body></html>
+    `);
+    w.document.close();
+  }catch(e){
+    console.error(e);
+    alert("Score Card नहीं खुला: "+e.message);
   }
 }
 
 async function sendFeedback(){
   const m=$("feedback").value.trim();
   if(!m||!lastResultId)return;
-
   try{
-    await api(
-      "feedback",
-      "POST",
-      {result_id:lastResultId,message:m}
-    );
+    await api("feedback","POST",{result_id:lastResultId,message:m});
     $("feedback").value="";
     alert("Feedback भेज दिया गया।");
   }catch(e){
     console.error(e);
-    alert("Feedback save नहीं हुआ।");
+    alert("Feedback save नहीं हुआ: "+e.message);
   }
 }
 
 function adminLogin(){
-  if(prompt("Owner Code")!==ADMIN_CODE)
-    return alert("गलत Owner Code");
+  if(prompt("Owner Code")!==ADMIN_CODE)return alert("गलत Owner Code");
   show("admin");
   adminTests();
 }
 
 async function adminTests(){
   try{
-    const r=await api("tests");
+    const r=await api("tests","GET",null,"?select=id,name,duration,questions,published,exam_type&order=id.desc");
+    const rows=(r||[]).map(normalizeTest);
 
     $("adminBody").innerHTML=`
       <h3>Tests</h3>
-
       <button class="p" onclick="newTest()">+ नया Test जोड़ें</button>
-
       <div class="importbox">
         <b>AIIMS CRE</b><br>
-        <button class="p" onclick="document.getElementById('aiimsJsonFile').click()">
-          📥 AIIMS JSON Import
-        </button>
-        <input id="aiimsJsonFile"
-          type="file"
-          accept=".json,application/json"
-          class="hide"
-          onchange="importExamJSON(event,'AIIMS')">
-
-        <br>
-
+        <button class="p" onclick="document.getElementById('aiimsJsonFile').click()">📥 AIIMS JSON Import</button>
+        <input id="aiimsJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importExamJSON(event,'AIIMS')">
+        <br><br>
         <b>SSC MTS</b><br>
-        <button class="g" onclick="document.getElementById('sscJsonFile').click()">
-          📥 SSC MTS JSON Import
-        </button>
-        <input id="sscJsonFile"
-          type="file"
-          accept=".json,application/json"
-          class="hide"
-          onchange="importExamJSON(event,'SSC MTS')">
-
-        <p id="adminImportHint">
-          AIIMS की file AIIMS में और SSC MTS की file SSC MTS में जाएगी।
-        </p>
+        <button class="g" onclick="document.getElementById('sscJsonFile').click()">📥 SSC MTS JSON Import</button>
+        <input id="sscJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importExamJSON(event,'SSC MTS')">
       </div>
-
       <div id="testList">
-        ${r.map(t=>`
-          <div class="card">
-            <b>${esc(t.name)}</b> —
-            ${t.published?"Published":"Draft"}<br>
-            ${t.questions?.length||0} प्रश्न • ${t.duration} मिनट<br>
-
-            <button class="l"
-              onclick="toggle(${t.id},${!t.published})">
-              ${t.published?"Unpublish":"Publish"}
-            </button>
-
-            <button class="d"
-              onclick="deleteTest(${t.id})">
-              Delete
-            </button>
-          </div>
-        `).join("")}
-      </div>
-    `;
+      ${rows.map(t=>`
+        <div class="card">
+          <b>${esc(t.name)}</b> — <span class="badge">${esc(t.exam_type)}</span> —
+          ${t.published?"Published":"Draft"}<br>
+          ${t.questions.length} प्रश्न • ${t.duration} मिनट<br>
+          <button class="l" onclick="toggle(${t.id},${!t.published})">${t.published?"Unpublish":"Publish"}</button>
+          <button class="d" onclick="deleteTest(${t.id})">Delete</button>
+        </div>
+      `).join("")}
+      </div>`;
   }catch(e){
     console.error(e);
-    $("adminBody").innerHTML="Supabase setup/RLS पूरा करें।";
+    $("adminBody").innerHTML="<p>Tests नहीं आ रहे: "+esc(e.message||e)+"</p>";
   }
 }
 
 function newTest(){
   $("adminBody").innerHTML=`
     <h3>नया 100 प्रश्न वाला Test</h3>
-
     <label>Exam</label>
     <select id="examType" onchange="updateAdminTiming()">
       <option value="AIIMS">AIIMS CRE</option>
       <option value="SSC MTS">SSC MTS</option>
     </select>
-
     <label>Test का नाम</label>
-    <input id="tname" value="AIIMS CRE-5 Mock Test 1">
-
-    <label>समय (auto)</label>
+    <input id="tname" value="AIIMS CRE Mock Test 1">
+    <label>समय</label>
     <input id="tdur" type="number" value="90" readonly>
-
-    <p id="adminExamInfo">AIIMS CRE: 5 Sections × 20 Questions × 18 मिनट • +4 / −1</p>
-
+    <p id="adminExamInfo"></p>
     <div class="importbox">
       <b>📥 Bulk Import</b>
-      <p>JSON फ़ाइल चुनें। इससे 100 प्रश्न अपने-आप भरेंगे।</p>
-
-      <button class="g" onclick="document.getElementById('newJsonFile').click()">
-        JSON फ़ाइल चुनें
-      </button>
-
-      <input id="newJsonFile"
-        type="file"
-        accept=".json,application/json"
-        class="hide"
-        onchange="importIntoBuilder(event)">
-
+      <p>100 प्रश्न वाली JSON file चुनें।</p>
+      <button class="g" onclick="document.getElementById('newJsonFile').click()">JSON फ़ाइल चुनें</button>
+      <input id="newJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importIntoBuilder(event)">
       <span id="importStatus"></span>
     </div>
-
     <div id="builder"></div>
-
     <button class="p" onclick="saveBuilder(false)">Save Draft</button>
     <button class="g" onclick="saveBuilder(true)">Save & Publish</button>
-    <button class="l" onclick="adminTests()">वापस</button>
-  `;
-
-  renderBuilder(
-    Array.from({length:100},()=>({q:"",o:["","","",""],a:0}))
-  );
+    <button class="l" onclick="adminTests()">वापस</button>`;
+  updateAdminTiming();
+  renderBuilder(Array.from({length:100},()=>({q:"",o:["","","",""],a:0,section:""})));
 }
 
 function updateAdminTiming(){
   const type=$("examType").value;
-  if(type==="SSC MTS"){
-    $("tname").value="SSC MTS Mock Test 1";
-    $("tdur").value=60;
-    $("adminExamInfo").textContent="SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.50";
-  }else{
-    $("tname").value="AIIMS CRE-5 Mock Test 1";
-    $("tdur").value=90;
-    $("adminExamInfo").textContent="AIIMS CRE: 5 Sections × 20 Questions × 18 मिनट • +4 / −1";
-  }
+  const cfg=EXAM_CONFIGS[type];
+  $("tdur").value=cfg.sections.reduce((a,s)=>a+s.minutes,0);
+  $("tname").value=type==="SSC MTS"?"SSC MTS Mock Test 1":"AIIMS CRE Mock Test 1";
+  $("adminExamInfo").textContent=
+    cfg.sections.map(s=>`${s.name}: ${s.count}Q/${s.minutes}min`).join(" • ")
+    +` • +${cfg.correctMarks} / ${cfg.wrongMarks}`;
 }
 
 function renderBuilder(qs){
   const b=$("builder");
-
-  b.innerHTML=
-    `<p><b>${qs.length} प्रश्न तैयार हैं।</b> सही उत्तर चुनें।</p>`+
+  b.innerHTML=`<p><b>${qs.length} प्रश्न तैयार हैं।</b> सही उत्तर चुनें।</p>`+
     qs.map((q,i)=>`
       <div class="qedit">
         <h4>प्रश्न ${i+1}</h4>
-
-        <input
-          id="q${i}"
-          placeholder="प्रश्न लिखें"
-          value="${attr(q.q)}">
-
-        <input
-          id="o${i}a"
-          placeholder="A विकल्प"
-          value="${attr(q.o[0]||"")}">
-
-        <input
-          id="o${i}b"
-          placeholder="B विकल्प"
-          value="${attr(q.o[1]||"")}">
-
-        <input
-          id="o${i}c"
-          placeholder="C विकल्प"
-          value="${attr(q.o[2]||"")}">
-
-        <input
-          id="o${i}d"
-          placeholder="D विकल्प"
-          value="${attr(q.o[3]||"")}">
-
+        <input id="q${i}" placeholder="प्रश्न लिखें" value="${attr(q.q)}">
+        <input id="o${i}a" placeholder="A विकल्प" value="${attr(q.o?.[0]||"")}">
+        <input id="o${i}b" placeholder="B विकल्प" value="${attr(q.o?.[1]||"")}">
+        <input id="o${i}c" placeholder="C विकल्प" value="${attr(q.o?.[2]||"")}">
+        <input id="o${i}d" placeholder="D विकल्प" value="${attr(q.o?.[3]||"")}">
         <label>सही उत्तर:</label>
-
         <select id="a${i}">
           <option value="0" ${q.a===0?"selected":""}>A</option>
           <option value="1" ${q.a===1?"selected":""}>B</option>
           <option value="2" ${q.a===2?"selected":""}>C</option>
           <option value="3" ${q.a===3?"selected":""}>D</option>
         </select>
-      </div>
-    `).join("");
+      </div>`).join("");
 }
 
 function setImportedExamName(name){
   const n=String(name||"").toLowerCase();
-  const typeEl=$("examType");
-  const durEl=$("tdur");
-  const infoEl=$("adminExamInfo");
-
-  if(n.includes("ssc")||n.includes("mts")){
-    if(typeEl)typeEl.value="SSC MTS";
-    if(durEl)durEl.value=60;
-    if(infoEl)infoEl.textContent="SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.50";
-  }else{
-    if(typeEl)typeEl.value="AIIMS";
-    if(durEl)durEl.value=90;
-    if(infoEl)infoEl.textContent="AIIMS CRE: 5 Sections × 20 Questions × 18 मिनट • +4 / −1";
-  }
+  const type=(n.includes("ssc")||n.includes("mts"))?"SSC MTS":"AIIMS";
+  if($("examType"))$("examType").value=type;
+  updateAdminTiming();
+  if($("tname"))$("tname").value=name||$("tname").value;
 }
 
+function prepareImportedQuestions(d){
+  if(!d.questions||d.questions.length!==100)throw Error("100 प्रश्न आवश्यक हैं");
+  return normalizeQuestions(d.questions);
+}
 
-function importExamJSON(ev, examType){
-  const f=ev.target.files[0];
-  if(!f)return;
-
+function importExamJSON(ev,examType){
+  const f=ev.target.files[0]; if(!f)return;
   const r=new FileReader();
-
   r.onload=()=>{
     try{
       const d=JSON.parse(r.result);
-
-      if(!d.questions || d.questions.length!==100)
-        throw Error("100 प्रश्न आवश्यक हैं");
-
+      const qs=prepareImportedQuestions(d);
       newTest();
-
       setTimeout(()=>{
         $("examType").value=examType;
-
-        if(examType==="SSC MTS"){
-          $("tname").value=d.name||"SSC MTS Mock Test 1";
-          $("tdur").value=60;
-          $("adminExamInfo").textContent=
-            "SSC MTS: 4 Sections × 25 Questions × 15 मिनट • +2 / −0.50";
-        }else{
-          $("tname").value=d.name||"AIIMS CRE-5 Mock Test 1";
-          $("tdur").value=90;
-          $("adminExamInfo").textContent=
-            "AIIMS CRE: 5 Sections × 20 Questions × 18 मिनट • +4 / −1";
-        }
-
-        renderBuilder(d.questions);
-
-        if($("importStatus")){
-          $("importStatus").textContent=
-            " ✅ "+examType+" के 100 प्रश्न Import हो गए";
-        }
+        updateAdminTiming();
+        $("tname").value=d.name||d.test_name||(`${examType} Mock Test 1`);
+        renderBuilder(qs);
+        $("importStatus").textContent="✅ "+examType+" के 100 प्रश्न Import हो गए";
       },50);
-
-    }catch(e){
-      alert(examType+" JSON Import नहीं हुआ: "+e.message);
-    }
+    }catch(e){alert(examType+" JSON Import नहीं हुआ: "+e.message)}
   };
-
   r.readAsText(f);
 }
 
 function importIntoBuilder(ev){
-  const f=ev.target.files[0];
-  if(!f)return;
+  const f=ev.target.files[0]; if(!f)return;
   const r=new FileReader();
   r.onload=()=>{
     try{
       const d=JSON.parse(r.result);
-      if(!d.questions||d.questions.length!==100)throw Error("फ़ाइल में 100 प्रश्न नहीं हैं");
-      const importedName=d.name||"AIIMS CRE-5 Mock Test 1";
-      const tname=$("tname");
-      if(tname)tname.value=importedName;
-      setImportedExamName(importedName);
-      renderBuilder(d.questions);
-      const status=$("importStatus");
-      if(status)status.textContent=" ✅ 100 प्रश्न Import हो गए";
-    }catch(e){
-      alert("JSON फ़ाइल सही नहीं है: "+e.message);
-    }
+      const qs=prepareImportedQuestions(d);
+      $("tname").value=d.name||d.test_name||$("tname").value;
+      setImportedExamName($("tname").value);
+      renderBuilder(qs);
+      $("importStatus").textContent="✅ 100 प्रश्न Import हो गए";
+    }catch(e){alert("JSON फ़ाइल सही नहीं है: "+e.message)}
   };
-  r.readAsText(f);
-}
-
-function importJSON(ev){
-  const f=ev.target.files[0];
-  if(!f)return;
-  const r=new FileReader();
-
-  r.onload=()=>{
-    try{
-      const d=JSON.parse(r.result);
-      if(!d.questions||d.questions.length!==100)throw Error("100 प्रश्न आवश्यक हैं");
-
-      newTest();
-
-      setTimeout(()=>{
-        const importedName=d.name||"AIIMS CRE-5 Mock Test 1";
-        const tname=$("tname");
-        if(tname)tname.value=importedName;
-        setImportedExamName(importedName);
-        renderBuilder(d.questions);
-        const status=$("importStatus");
-        if(status)status.textContent=" ✅ 100 प्रश्न Import हो गए";
-      },50);
-
-    }catch(e){
-      alert("Import नहीं हुआ: "+e.message);
-    }
-  };
-
   r.readAsText(f);
 }
 
 function collectBuilder(){
   const qs=[];
-
   for(let i=0;i<100;i++){
     const q=$("q"+i).value.trim();
-
-    const o=[
-      $("o"+i+"a").value.trim(),
-      $("o"+i+"b").value.trim(),
-      $("o"+i+"c").value.trim(),
-      $("o"+i+"d").value.trim()
-    ];
-
+    const o=[$("o"+i+"a").value.trim(),$("o"+i+"b").value.trim(),$("o"+i+"c").value.trim(),$("o"+i+"d").value.trim()];
     const a=Number($("a"+i).value);
-
-    if(!q||o.some(x=>!x))
-      throw Error("प्रश्न "+(i+1)+" अधूरा है");
-
+    if(!q||o.some(x=>!x))throw Error("प्रश्न "+(i+1)+" अधूरा है");
     qs.push({q,o,a});
   }
-
   return qs;
 }
 
@@ -767,12 +821,8 @@ async function saveBuilder(publish){
     const qs=collectBuilder();
     const type=$("examType").value;
     const name=$("tname").value.trim()||(type==="SSC MTS"?"SSC MTS Mock Test 1":"AIIMS CRE Mock Test 1");
-    const duration=type==="SSC MTS"?60:90;
-
-    if(qs.length!==100)throw Error("Test में 100 प्रश्न होने चाहिए।");
-
-    await api("tests","POST",{name,duration,questions:qs,published:publish});
-
+    const duration=EXAM_CONFIGS[type].sections.reduce((a,s)=>a+s.minutes,0);
+    await api("tests","POST",{name,duration,questions:qs,published:publish,exam_type:type});
     alert(publish?"Test Publish हो गया।":"Test Draft में Save हो गया।");
     adminTests();
   }catch(e){
@@ -783,128 +833,133 @@ async function saveBuilder(publish){
 
 async function toggle(id,v){
   try{
-    await api(
-      "tests",
-      "PATCH",
-      {published:v},
-      "?id=eq."+id
-    );
+    await api("tests","PATCH",{published:v},"?id=eq."+id);
     adminTests();
-  }catch(e){
-    console.error(e);
-    alert("Publish बदल नहीं पाया।");
-  }
+  }catch(e){alert("Publish बदल नहीं पाया: "+e.message)}
 }
 
 async function deleteTest(id){
   if(!confirm("क्या यह Test हटाना है?"))return;
-
   try{
-    await api(
-      "tests",
-      "DELETE",
-      null,
-      "?id=eq."+id
-    );
+    await api("tests","DELETE",null,"?id=eq."+id);
     adminTests();
-  }catch(e){
-    console.error(e);
-    alert("Delete नहीं हुआ।");
-  }
+  }catch(e){alert("Delete नहीं हुआ: "+e.message)}
 }
 
 async function adminResults(){
   try{
-    const r=await api("results");
+    const [results,allTests]=await Promise.all([
+      api("results","GET",null,"?select=id,test_id,exam_type,student_name,mobile,score,correct,wrong,skipped,answers,review,created_at&order=id.desc"),
+      api("tests","GET",null,"?select=id,name,exam_type,questions")
+    ]);
+    const testMap={};
+    (allTests||[]).forEach(t=>testMap[t.id]=normalizeTest(t));
 
-    r.sort((a,b)=>
-      b.score-a.score||
-      a.id-b.id
-    );
+    const grouped={};
+    (results||[]).forEach(r=>(grouped[r.test_id] ||= []).push(r));
 
-    $("adminBody").innerHTML=
-      "<h3>सभी Results / Rank</h3>"+
-      "<table>"+
-      "<tr>"+
-      "<th>Rank</th>"+
-      "<th>नाम</th>"+
-      "<th>Test</th>"+
-      "<th>अंक</th>"+
-      "<th>सही</th>"+
-      "<th>गलत</th>"+
-      "<th>छोड़े</th>"+
-      "</tr>"+
-      r.map((x,i)=>`
-        <tr>
-          <td>${i+1}</td>
-          <td>${esc(x.student_name)}</td>
-          <td>${x.test_id}</td>
-          <td>${x.score}</td>
-          <td>${x.correct}</td>
-          <td>${x.wrong}</td>
-          <td>${x.skipped}</td>
-        </tr>
-      `).join("")+
-      "</table>";
+    let html="<h3>सभी Results / Rank</h3>";
+    for(const [testId,list] of Object.entries(grouped)){
+      const t=testMap[testId];
+      list.sort((a,b)=>(Number(b.score)-Number(a.score)) || (Number(a.id)-Number(b.id)));
 
+      html+=`
+        <div class="card">
+          <h3>${esc(t?.name||("Test #"+testId))}</h3>
+          <div class="badge">${esc(t?.exam_type||list[0]?.exam_type||"")}</div>
+          <div class="tableWrap"><table>
+            <tr><th>Rank</th><th>नाम</th><th>Mobile</th><th>अंक</th><th>सही</th><th>गलत</th><th>छोड़े</th><th>Attempted</th><th>Details</th></tr>
+            ${list.map((r,i)=>`
+              <tr>
+                <td>${i+1}</td>
+                <td>${esc(r.student_name)}</td>
+                <td>${esc(r.mobile)}</td>
+                <td>${formatScore(r.score)}</td>
+                <td>${r.correct}</td>
+                <td>${r.wrong}</td>
+                <td>${r.skipped}</td>
+                <td>${(Number(r.correct)||0)+(Number(r.wrong)||0)}</td>
+                <td><button class="l" onclick="adminViewResult(${r.id},${Number(testId)})">View</button></td>
+              </tr>
+            `).join("")}
+          </table></div>
+        </div>`;
+    }
+    $("adminBody").innerHTML=html||"<p>अभी कोई Result नहीं है।</p>";
   }catch(e){
     console.error(e);
-    alert("Results नहीं आ रहे।");
+    alert("Results नहीं आ रहे: "+e.message);
+  }
+}
+
+async function adminViewResult(resultId,testId){
+  try{
+    const rr=await api("results","GET",null,"?select=*&id=eq."+resultId);
+    const tt=await api("tests","GET",null,"?select=id,name,exam_type,questions&id=eq."+testId);
+    const r=rr[0],t=tt[0]?normalizeTest(tt[0]):null;
+    if(!r||!t)return;
+
+    const ranks=await api("results","GET",null,"?select=id,score&test_id=eq."+testId+"&order=score.desc,id.asc");
+    const rank=ranks.findIndex(x=>String(x.id)===String(r.id))+1;
+
+    const chosen=Array.isArray(r.answers)?r.answers:[];
+    const review=Array.isArray(r.review)?r.review:[];
+    $("adminBody").innerHTML=`
+      <button class="l" onclick="adminResults()">← वापस Results</button>
+      <div class="card">
+        ${renderScoreCardHTML(r,t,false)}
+        <div class="info">🏆 Rank: <b>${rank>0?rank:"—"}</b></div>
+      </div>
+      <div class="card">
+        <h3>Question-wise Attempt</h3>
+        ${t.questions.map((q,k)=>{
+          const user=chosen[k];
+          const isCorrect=Number(user)===Number(q.a);
+          return `<div class="${isCorrect?"right":"wrong"}">
+            <b>Q${k+1}. ${esc(q.q)}</b><br>
+            Student Answer:
+            <b>${user===null||user===undefined?"कोई उत्तर नहीं":"ABCD"[Number(user)]+". "+esc(q.o[Number(user)]||"")}</b><br>
+            सही उत्तर:
+            <b>${"ABCD"[q.a]}. ${esc(q.o[q.a])}</b>
+          </div>`;
+        }).join("")}
+      </div>`;
+  }catch(e){
+    alert("Details नहीं खुल पाए: "+e.message);
   }
 }
 
 async function adminFeedback(){
   try{
     const r=await api("feedback");
+    $("adminBody").innerHTML="<h3>Feedback</h3>"+(r||[]).map(x=>`<div class="card">${esc(x.message)}</div>`).join("");
+  }catch(e){alert("Feedback नहीं आ रहा: "+e.message)}
+}
 
-    $("adminBody").innerHTML=
-      "<h3>Feedback</h3>"+
-      r.map(x=>`
-        <div class="card">
-          ${esc(x.message)}
-        </div>
-      `).join("");
+function formatScore(n){
+  const x=Number(n);
+  if(!Number.isFinite(x))return "0";
+  return Number.isInteger(x)?String(x):x.toFixed(2).replace(/0+$/,"").replace(/\.$/,"");
+}
 
-  }catch(e){
-    console.error(e);
-    alert("Feedback नहीं आ रहा।");
-  }
+function formatDate(v){
+  if(!v)return "—";
+  try{return new Date(v).toLocaleString("hi-IN",{dateStyle:"medium",timeStyle:"short"})}
+  catch{return String(v)}
 }
 
 function esc(s){
-  return String(s??"").replace(
-    /[&<>"']/g,
-    c=>({
-      "&":"&amp;",
-      "<":"&lt;",
-      ">":"&gt;",
-      '"':"&quot;",
-      "'":"&#39;"
-    }[c])
-  );
+  return String(s??"").replace(/[&<>"']/g,c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
 }
+function attr(s){return esc(s)}
 
-function attr(s){
-  return esc(s);
-}
-</script>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>
-if (window.pdfjsLib) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-}
-</script>
-
-<script>
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("./service-worker.js")
-      .then(()=>console.log("AIIMS CRE App ready"))
-      .catch(err=>console.error("Service Worker error:",err));
+    navigator.serviceWorker.register("./service-worker.js").catch(err=>console.error("Service Worker error:",err));
   });
 }
 </script>
-
 </body>
 </html>
