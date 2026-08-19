@@ -167,11 +167,11 @@ const EXAM_CONFIGS={
     title:"AIIMS CRE",
     examType:"AIIMS",
     sections:[
-      {name:"Maths",count:35,minutes:18},
-      {name:"English",count:35,minutes:18},
-      {name:"CCS Rules",count:10,minutes:18},
-      {name:"Computer",count:10,minutes:18},
-      {name:"Current GK",count:10,minutes:18}
+      {name:"Section 1",count:20,minutes:18},
+      {name:"Section 2",count:20,minutes:18},
+      {name:"Section 3",count:20,minutes:18},
+      {name:"Section 4",count:20,minutes:18},
+      {name:"Section 5",count:20,minutes:18}
     ],
     correctMarks:4,
     wrongMarks:-1,
@@ -264,6 +264,8 @@ async function loadStudentPanel(){
         <div class="card historyCard">
           <b>${esc(t.name)}</b><br>
           ${t.questions.length} प्रश्न • ${examConfig.sections.length} Sections • ${examConfig.sections.reduce((a,s)=>a+s.minutes,0)} मिनट कुल<br>
+          हर Section: ${examConfig.sections[0].count} प्रश्न • ${examConfig.sections[0].minutes} मिनट<br>
+          ${selectedExam==="AIIMS"?"AIIMS subjects 35/35/10/10/10 रहेंगे, लेकिन 100 प्रश्न 5×20 timed sections में mix होकर आएँगे।":"हर Section में "+examConfig.sections[0].count+" प्रश्न।"}<br>
           सही +${examConfig.correctMarks} • गलत ${examConfig.wrongMarks} • अधिकतम ${examConfig.totalMarks} अंक
           ${latest ? `
             <div class="right">
@@ -393,6 +395,76 @@ function normalizeQuestions(arr){
   });
 }
 
+
+function shuffleArray(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function aiimsSubjectFromQuestion(q,index){
+  const s=String(q.section||q.sectionName||"").toLowerCase();
+  if(s.includes("math")) return "Maths";
+  if(s.includes("english")) return "English";
+  if(s.includes("ccs")) return "CCS Rules";
+  if(s.includes("computer")) return "Computer";
+  if(s.includes("current")||s.includes("gk")) return "Current GK";
+
+  // Compatibility with older AIIMS JSON files that have no section label:
+  if(index<35) return "Maths";
+  if(index<70) return "English";
+  if(index<80) return "CCS Rules";
+  if(index<90) return "Computer";
+  return "Current GK";
+}
+
+function buildAIIMSQuestionOrder(source){
+  const buckets={
+    "Maths":[],
+    "English":[],
+    "CCS Rules":[],
+    "Computer":[],
+    "Current GK":[]
+  };
+
+  source.forEach((q,i)=>{
+    const subject=aiimsSubjectFromQuestion(q,i);
+    buckets[subject].push({...q,subject});
+  });
+
+  const required={
+    "Maths":35,
+    "English":35,
+    "CCS Rules":10,
+    "Computer":10,
+    "Current GK":10
+  };
+
+  for(const subject of Object.keys(required)){
+    if(buckets[subject].length!==required[subject]){
+      throw Error(
+        `AIIMS Test में ${subject} के ${required[subject]} प्रश्न होने चाहिए, `+
+        `लेकिन ${buckets[subject].length} मिले।`
+      );
+    }
+  }
+
+  // Shuffle inside each subject first, then shuffle all 100.
+  // This keeps the exact 35/35/10/10/10 distribution but mixes subjects
+  // naturally across the five 20-question timed sections.
+  let mixed=[];
+  for(const subject of Object.keys(buckets)){
+    mixed.push(...shuffleArray(buckets[subject]));
+  }
+  mixed=shuffleArray(mixed);
+
+  // Exactly 5 sections × 20 questions.
+  return Array.from({length:5},(_,i)=>mixed.slice(i*20,(i+1)*20)).flat();
+}
+
 function start(id){
   const mobile=$("mobile").value.trim();
   const first=$("firstName").value.trim();
@@ -402,8 +474,20 @@ function start(id){
   if(!first) return alert("First Name लिखें");
   if(!last) return alert("Last Name लिखें");
 
-  test=tests.find(x=>String(x.id)===String(id));
-  if(!test||test.questions.length!==100)return alert("यह Test 100 प्रश्न वाला सही Test नहीं है।");
+  const rawTest=tests.find(x=>String(x.id)===String(id));
+  if(!rawTest||rawTest.questions.length!==100)return alert("यह Test 100 प्रश्न वाला सही Test नहीं है।");
+
+  try{
+    test={
+      ...rawTest,
+      // AIIMS: fixed subject totals, but 5 sections of 20 mixed questions.
+      questions:selectedExam==="AIIMS"
+        ? buildAIIMSQuestionOrder(rawTest.questions)
+        : rawTest.questions
+    };
+  }catch(e){
+    return alert(e.message||String(e));
+  }
 
   idx=0;
   answers=Array(100).fill(null);
@@ -457,7 +541,9 @@ function sectionName(i){
 function draw(){
   if(!test)return;
   const start=sectionStart(),end=sectionEndIndex(),q=test.questions[idx];
-  $("num").textContent=`प्रश्न ${idx+1}/100 • ${sectionName(sectionIndex)}`;
+  $("num").textContent=
+    `प्रश्न ${idx+1}/100 • ${sectionName(sectionIndex)}`+
+    (selectedExam==="AIIMS" && q.subject ? ` • ${esc(q.subject)}` : "");
   $("count").textContent=`उत्तर दिए: ${answers.slice(start,end+1).filter(x=>x!==null).length}/${examConfig.sections[sectionIndex].count}`;
   $("question").textContent=q.q;
   $("options").innerHTML=q.o.map((v,j)=>
@@ -525,6 +611,10 @@ async function submitTest(auto=false){
 
   const score=Number((c*examConfig.correctMarks+w*examConfig.wrongMarks).toFixed(2));
   const reviewData=test.questions.map((q,k)=>({
+    question:q.q,
+    options:q.o,
+    section:q.section||q.subject||"",
+    subject:q.subject||q.section||"",
     user:answers[k],
     correctIndex:q.a,
     correct:answers[k]===q.a
@@ -571,7 +661,7 @@ async function submitTest(auto=false){
       `<p><b>${esc(examConfig.title)}</b> • ${esc(test.name)} • ${formatScore(score)} / ${examConfig.totalMarks}</p>`+
       test.questions.map((q,k)=>`
         <div class="${answers[k]===q.a?"right":"wrong"}">
-          <b>Q${k+1}. ${esc(q.q)}</b><br>
+          <b>Q${k+1}. ${esc(q.q)}</b>${selectedExam==="AIIMS" && q.subject ? ` <span class="badge">${esc(q.subject)}</span>` : ""}<br>
           विद्यार्थी ने चुना:
           <b>${answers[k]===null?"कोई उत्तर नहीं":"ABCD"[answers[k]]+". "+esc(q.o[answers[k]])}</b><br>
           सही उत्तर:
@@ -902,8 +992,21 @@ async function adminViewResult(resultId,testId){
     const ranks=await api("results","GET",null,"?select=id,score&test_id=eq."+testId+"&order=score.desc,id.asc");
     const rank=ranks.findIndex(x=>String(x.id)===String(r.id))+1;
 
-    const chosen=Array.isArray(r.answers)?r.answers:[];
-    const review=Array.isArray(r.review)?r.review:[];
+    const snapshot=Array.isArray(r.review)?r.review:[];
+    const originalAnswers=Array.isArray(r.answers)?r.answers:[];
+
+    const rows = snapshot.length===100
+      ? snapshot.map(x=>({
+          q:String(x.question||""),
+          o:Array.isArray(x.options)?x.options:["","","",""],
+          a:Number(x.correctIndex),
+          user:x.user,
+          subject:x.subject||x.section||""
+        }))
+      : t.questions.map((q,k)=>({
+          q:q.q,o:q.o,a:q.a,user:originalAnswers[k],subject:q.section||""
+        }));
+
     $("adminBody").innerHTML=`
       <button class="l" onclick="adminResults()">← वापस Results</button>
       <div class="card">
@@ -912,15 +1015,16 @@ async function adminViewResult(resultId,testId){
       </div>
       <div class="card">
         <h3>Question-wise Attempt</h3>
-        ${t.questions.map((q,k)=>{
-          const user=chosen[k];
+        ${rows.map((q,k)=>{
+          const user=q.user;
           const isCorrect=Number(user)===Number(q.a);
           return `<div class="${isCorrect?"right":"wrong"}">
-            <b>Q${k+1}. ${esc(q.q)}</b><br>
+            <b>Q${k+1}. ${esc(q.q)}</b>
+            ${q.subject?`<span class="badge">${esc(q.subject)}</span>`:""}<br>
             Student Answer:
-            <b>${user===null||user===undefined?"कोई उत्तर नहीं":"ABCD"[Number(user)]+". "+esc(q.o[Number(user)]||"")}</b><br>
+            <b>${user===null||user===undefined?"कोई उत्तर नहीं":("ABCD"[Number(user)]||"?")+". "+esc(q.o[Number(user)]||"")}</b><br>
             सही उत्तर:
-            <b>${"ABCD"[q.a]}. ${esc(q.o[q.a])}</b>
+            <b>${"ABCD"[q.a]}. ${esc(q.o[q.a]||"")}</b>
           </div>`;
         }).join("")}
       </div>`;
