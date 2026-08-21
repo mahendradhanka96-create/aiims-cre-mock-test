@@ -98,8 +98,10 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
     <div class="sectionBar" id="sectionBar"></div>
     <div id="sectionInfo" class="lockNote"></div>
 
-    <b id="num"></b>
-    <span id="count" style="float:right"></span>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <b id="num"></b>
+      <div><span id="count"></span> <button class="l noPrint" id="pauseBtn" onclick="togglePause()">⏸ Pause</button></div>
+    </div>
 
     <h3 id="question"></h3>
     <div id="options" class="opts"></div>
@@ -196,6 +198,7 @@ let selectedExam="AIIMS";
 let examConfig=EXAM_CONFIGS.AIIMS;
 let tests=[],test=null,idx=0,answers=[],lastResultId=null,lastResultData=null;
 let sectionIndex=0,sectionEnd=0,sectionTimerRunning=false,submitted=false;
+let examPaused=false,pauseStartedAt=0;
 let loadTimer=null;
 
 const $=x=>document.getElementById(x);
@@ -493,6 +496,8 @@ function start(id){
   answers=Array(100).fill(null);
   sectionIndex=0;
   submitted=false;
+  examPaused=false;
+  pauseStartedAt=0;
   lastResultId=null;
   lastResultData=null;
   startSectionTimer();
@@ -503,12 +508,16 @@ function start(id){
 function startSectionTimer(){
   sectionEnd=Date.now()+examConfig.sections[sectionIndex].minutes*60*1000;
   sectionTimerRunning=true;
+  examPaused=false;
+  pauseStartedAt=0;
+  updatePauseButton();
   updateTimerDisplay();
   setTimeout(tickSectionTimer,250);
 }
 
 function tickSectionTimer(){
   if(!sectionTimerRunning||submitted)return;
+  if(examPaused){setTimeout(tickSectionTimer,250);return;}
   const remaining=Math.max(0,Math.ceil((sectionEnd-Date.now())/1000));
   updateTimerDisplay(remaining);
   if(remaining<=0){
@@ -517,6 +526,27 @@ function tickSectionTimer(){
     return;
   }
   setTimeout(tickSectionTimer,250);
+}
+
+function togglePause(){
+  if(submitted||!sectionTimerRunning)return;
+  if(!examPaused){
+    examPaused=true;
+    pauseStartedAt=Date.now();
+    updatePauseButton();
+    if($("sectionInfo"))$("sectionInfo").textContent="⏸ Test Pause है। काम खत्म होने पर Resume दबाएँ। इस दौरान time नहीं घटेगा।";
+  }else{
+    sectionEnd += Date.now()-pauseStartedAt;
+    examPaused=false;
+    pauseStartedAt=0;
+    updatePauseButton();
+    draw();
+  }
+}
+
+function updatePauseButton(){
+  const b=$("pauseBtn");
+  if(b)b.textContent=examPaused?"▶ Resume":"⏸ Pause";
 }
 
 function updateTimerDisplay(seconds){
@@ -565,6 +595,8 @@ function draw(){
     : `${sectionName(sectionIndex)}: ${examConfig.sections[sectionIndex].count} प्रश्न। समय पूरा होने पर Test अपने-आप Submit होगा।`;
 
   renderSectionBar();
+  updatePauseButton();
+  if(examPaused && $("sectionInfo")) $("sectionInfo").textContent="⏸ Test Pause है। Resume दबाएँ। Pause के दौरान time नहीं घट रहा है।";
 }
 
 function renderSectionBar(){
@@ -576,16 +608,18 @@ function renderSectionBar(){
   }).join("");
 }
 
-function selectAnswer(j){ if(idx>=sectionStart()&&idx<=sectionEndIndex()){answers[idx]=j;draw()} }
-function jumpQuestion(globalIndex){ if(globalIndex>=sectionStart()&&globalIndex<=sectionEndIndex()){idx=globalIndex;draw()} }
-function next(){if(idx<sectionEndIndex()){idx++;draw()}}
-function prev(){if(idx>sectionStart()){idx--;draw()}}
-function clearAnswer(){answers[idx]=null;draw()}
+function selectAnswer(j){ if(examPaused)return; if(idx>=sectionStart()&&idx<=sectionEndIndex()){answers[idx]=j;draw()} }
+function jumpQuestion(globalIndex){ if(examPaused)return; if(globalIndex>=sectionStart()&&globalIndex<=sectionEndIndex()){idx=globalIndex;draw()} }
+function next(){if(examPaused)return;if(idx<sectionEndIndex()){idx++;draw()}}
+function prev(){if(examPaused)return;if(idx>sectionStart()){idx--;draw()}}
+function clearAnswer(){if(examPaused)return;answers[idx]=null;draw()}
 
 function moveToNextSectionOrSubmit(auto=true){
   if(sectionIndex<examConfig.sections.length-1){
     sectionIndex++;
     idx=sectionStart();
+    examPaused=false;
+    pauseStartedAt=0;
     startSectionTimer();
     draw();
     if(auto)alert(`${sectionName(sectionIndex-1)} का समय पूरा हो गया। अब ${sectionName(sectionIndex)} शुरू हो गया है।`);
@@ -596,11 +630,15 @@ function moveToNextSectionOrSubmit(auto=true){
 
 async function submitTest(auto=false){
   if(submitted)return;
+  if(examPaused)return alert("पहले Test को Resume करें, फिर Submit करें।");
   if(sectionIndex!==examConfig.sections.length-1)return alert("आखिरी Section पूरा होने के बाद ही Test Submit होगा।");
   if(!auto&&!confirm("क्या पूरा Test Submit करना है?"))return;
 
   submitted=true;
   sectionTimerRunning=false;
+  examPaused=false;
+  pauseStartedAt=0;
+  updatePauseButton();
 
   let c=0,w=0,s=0;
   answers.forEach((v,k)=>{
