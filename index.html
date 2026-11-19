@@ -153,6 +153,9 @@ const EXAM_CONFIGS={
 let selectedExam="AIIMS";
 let examConfig=EXAM_CONFIGS.AIIMS;
 const TOTAL_QUESTIONS=100;
+const LOCAL_TESTS_KEY="aiims_rml_local_tests_v1";
+const LOCAL_RESULTS_KEY="aiims_rml_local_results_v1";
+const LOCAL_FEEDBACK_KEY="aiims_rml_local_feedback_v1";
 
 let tests=[],test=null,idx=0,answers=[],lastResultId=null;
 let sectionIndex=0,sectionEnd=0,sectionTimerRunning=false,submitted=false;
@@ -166,10 +169,11 @@ function show(x){
 
 async function api(t,m="GET",b=null,q=""){
   const url=SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/"+t+q;
+  // Keep the same headers as the original working app for compatibility
+  // with the existing Supabase project and its current RLS setup.
   const h={
-    // Supabase publishable keys belong in the apikey header.
-    // Do not send an sb_publishable key as a Bearer JWT.
     "apikey":SUPABASE_ANON_KEY,
+    "Authorization":"Bearer "+SUPABASE_ANON_KEY,
     "Content-Type":"application/json",
     "Prefer":"return=representation"
   };
@@ -177,47 +181,63 @@ async function api(t,m="GET",b=null,q=""){
   try{
     r=await fetch(url,{
       method:m,
-      mode:"cors",
-      cache:"no-store",
       headers:h,
       body:b!==null?JSON.stringify(b):null
     });
   }catch(e){
-    const reason=(e&&e.message)?e.message:"Network/CORS error";
-    throw Error(
-      "Supabase server se connection nahi ho paya ("+reason+").\n\n"+
-      "Check karein: internet chal raha ho; Supabase project active ho; Project URL aur Publishable key sahi hon; browser extension/ad-blocker request block na kar raha ho."
-    );
+    const reason=(e&&e.message)?e.message:"Network/CORS/Project connection error";
+    throw Error("Supabase se connection nahi hua: "+reason+".\nURL: "+url+"\nCheck: internet, Supabase project status, project URL/key aur website hosting origin.");
   }
   const raw=await r.text();
   let data=null;
-  if(raw){
-    try{data=JSON.parse(raw)}catch(_){data=raw}
-  }
+  if(raw){try{data=JSON.parse(raw)}catch(_){data=raw}}
   if(!r.ok){
     const detail=typeof data==="string"?data:JSON.stringify(data);
-    if(r.status===401||r.status===403){
-      throw Error("Supabase ne request reject ki (HTTP "+r.status+"). API key ya Database RLS/permission check karein.\n"+detail);
-    }
-    if(r.status===404){
-      throw Error("Supabase table/column nahi mila (HTTP 404). Database schema check karein.\n"+detail);
-    }
-    throw Error("Supabase error HTTP "+r.status+": "+detail);
+    throw Error("Supabase HTTP "+r.status+": "+detail);
   }
   return data;
 }
+
+function readLocalTests(){
+  try{
+    const v=JSON.parse(localStorage.getItem(LOCAL_TESTS_KEY)||"[]");
+    return Array.isArray(v)?v:[];
+  }catch(e){return []}
+}
+function writeLocalTests(list){
+  localStorage.setItem(LOCAL_TESTS_KEY,JSON.stringify(list));
+}
+function readLocalResults(){
+  try{
+    const v=JSON.parse(localStorage.getItem(LOCAL_RESULTS_KEY)||"[]");
+    return Array.isArray(v)?v:[];
+  }catch(e){return []}
+}
+function writeLocalResults(list){
+  localStorage.setItem(LOCAL_RESULTS_KEY,JSON.stringify(list));
+}
+function readLocalFeedback(){
+  try{
+    const v=JSON.parse(localStorage.getItem(LOCAL_FEEDBACK_KEY)||"[]");
+    return Array.isArray(v)?v:[];
+  }catch(e){return []}
+}
+function writeLocalFeedback(list){
+  localStorage.setItem(LOCAL_FEEDBACK_KEY,JSON.stringify(list));
+}
+function isLocalId(id){return String(id).startsWith("LOCAL-")}
 
 async function checkDatabaseConnection(){
   const status=$("dbConnectionStatus");
   if(status)status.textContent="Database connection check ho raha hai...";
   try{
     await api("tests","GET",null,"?select=id&limit=1");
-    if(status)status.textContent="✅ Supabase connection successful. Ab JSON Import karke Save & Publish karein.";
-    alert("Supabase connection sahi hai.");
+    if(status)status.textContent="✅ Supabase connection successful.";
+    alert("Supabase connection successful hai.");
   }catch(e){
     const msg=e&&e.message?e.message:String(e);
     if(status)status.textContent="❌ "+msg;
-    alert("Database connection check fail hua:\n\n"+msg);
+    alert("Supabase connection abhi available nahi hai. Local save mode bhi enabled hai.\n\n"+msg);
   }
 }
 
@@ -230,55 +250,41 @@ function chooseExam(type){
 }
 
 async function loadStudentTests(){
+  const mobile=$("mobile").value.trim();
+  const localTests=readLocalTests().filter(t=>t.exam_type===selectedExam && t.published!==false);
+  let remoteTests=[];
+  let remoteResults=[];
+  let serverMessage="";
   try{
-    const mobile=$("mobile").value.trim();
-
-    tests=await api(
-      "tests",
-      "GET",
-      null,
+    remoteTests=await api("tests","GET",null,
       "?select=id,name,duration,questions,exam_type&published=eq.true&exam_type=eq."+
-      encodeURIComponent(selectedExam)+"&order=id.desc"
-    );
-
-    let completed=[];
-    if(/^\d{10}$/.test(mobile)){
-      completed=await api(
-        "results",
-        "GET",
-        null,
-        "?select=id,test_id,score,correct,wrong,skipped,exam_type&mobile=eq."+
-        encodeURIComponent(mobile)+"&exam_type=eq."+encodeURIComponent(selectedExam)+
-        "&order=id.asc"
-      );
-    }
-
-    const completedByTest={};
-    (completed||[]).forEach(r=>{ completedByTest[String(r.test_id)]=r; });
-
-    $("tests").innerHTML=tests.map(t=>{
-      const done=completedByTest[String(t.id)];
-      return `
-        <div class="card">
-          <b>${esc(t.name)}</b><br>
-          ${Array.isArray(t.questions)?t.questions.length:0} प्रश्न<br>
-          ${examConfig.pattern}<br>
-          कुल ${examConfig.totalMarks} अंक
-          <br><br>
-          ${done ? `
-            <div class="right">
-              ✅ <b>यह Test आप पहले दे चुके हैं</b><br>
-              Score: <b>${formatScore(done.score)}</b> • सही ${done.correct} • गलत ${done.wrong} • छोड़े ${done.skipped}
-            </div>
-          ` : `
-            <button class="p" onclick="start(${t.id})">▶️ Test शुरू करें</button>
-          `}
-        </div>`;
-    }).join("") || "<p>इस Exam का कोई Published Test नहीं है।</p>";
+      encodeURIComponent(selectedExam)+"&order=id.desc");
   }catch(e){
-    console.error(e);
-    $("tests").innerHTML="<p>Test लोड नहीं हो पाए। Error: "+esc(e?.message||e)+"</p>";
+    serverMessage=e.message||String(e);
   }
+  if(/^\d{10}$/.test(mobile)){
+    try{
+      remoteResults=await api("results","GET",null,
+        "?select=id,test_id,score,correct,wrong,skipped,exam_type&mobile=eq."+
+        encodeURIComponent(mobile)+"&exam_type=eq."+encodeURIComponent(selectedExam)+"&order=id.asc");
+    }catch(e){/* local results are still available */}
+  }
+  tests=[...(remoteTests||[]),...localTests];
+  const localResults=readLocalResults().filter(r=>r.mobile===mobile && r.exam_type===selectedExam);
+  const completedByTest={};
+  [...(remoteResults||[]),...localResults].forEach(r=>{completedByTest[String(r.test_id)]=r;});
+  const localNote=serverMessage
+    ? `<p class="lockNote">⚠️ Server connection उपलब्ध नहीं है। इस डिवाइस में Local Save किए गए टेस्ट दिखाए जा रहे हैं।</p>`
+    : "";
+  $("tests").innerHTML=localNote+(tests.map(t=>{
+    const done=completedByTest[String(t.id)];
+    return `<div class="card">
+      <b>${esc(t.name)}</b>${t.localOnly?` <span class="sectionPill">इस डिवाइस पर सेव</span>`:""}<br>
+      ${Array.isArray(t.questions)?t.questions.length:0} प्रश्न<br>
+      ${examConfig.pattern}<br>कुल ${examConfig.totalMarks} अंक<br><br>
+      ${done?`<div class="right">✅ यह टेस्ट पहले दिया जा चुका है<br>Score: <b>${formatScore(done.score)}</b> • सही ${done.correct} • गलत ${done.wrong} • छोड़े ${done.skipped}</div>`:`<button class="p" onclick="start('${String(t.id).replace(/'/g,"\\'")}')">▶️ Test शुरू करें</button>`}
+    </div>`;
+  }).join("")) || localNote+"<p>इस Exam का कोई Published Test नहीं है। Admin में JSON Import करके Save & Publish करें।</p>";
 }
 
 async function student(){
@@ -456,87 +462,77 @@ function formatScore(v){
 
 async function submitTest(auto=false){
   if(submitted)return;
-  if(sectionIndex!==examConfig.sections-1)
-    return alert("आखिरी Section पूरा होने के बाद ही Test Submit होगा।");
+  if(sectionIndex!==examConfig.sections-1)return alert("आखिरी Section पूरा होने के बाद ही Test Submit होगा।");
   if(!auto&&!confirm("क्या पूरा Test Submit करना है?"))return;
-
   submitted=true;
   sectionTimerRunning=false;
 
   let c=0,w=0,s=0;
-  answers.forEach((v,k)=>{
-    if(v===null)s++;
-    else if(v===test.questions[k].a)c++;
-    else w++;
-  });
-
+  answers.forEach((v,k)=>{if(v===null)s++;else if(v===test.questions[k].a)c++;else w++;});
   const score=Number((c*examConfig.correctMarks+w*examConfig.wrongMarks).toFixed(2));
-  const reviewData=test.questions.map((q,k)=>({
-    user:answers[k],correctIndex:q.a,correct:answers[k]===q.a
-  }));
-
+  const reviewData=test.questions.map((q,k)=>({user:answers[k],correctIndex:q.a,correct:answers[k]===q.a}));
+  const resultPayload={
+    test_id:test.id,exam_type:selectedExam,
+    student_name:($("firstName").value.trim()+" "+$("lastName").value.trim()).trim(),
+    mobile:$('mobile').value.trim(),score,correct:c,wrong:w,skipped:s,
+    answers:answers,review:reviewData
+  };
+  let rank=0,localSaved=false;
   try{
-    const rows=await api("results","POST",{
-      test_id:test.id,
-      exam_type:selectedExam,
-      student_name:$('firstName').value.trim()+" "+$('lastName').value.trim(),
-      mobile:$('mobile').value.trim(),
-      score,correct:c,wrong:w,skipped:s,answers,review:reviewData
-    });
-
-    if(!Array.isArray(rows)||!rows[0]||rows[0].id==null)
-      throw Error("Result database में insert हुआ लेकिन ID नहीं मिला।");
-
+    if(test.localOnly)throw Error("यह टेस्ट अभी केवल इस डिवाइस में सेव है।");
+    const rows=await api("results","POST",resultPayload);
+    if(!Array.isArray(rows)||!rows[0]||rows[0].id==null)throw Error("Database ने Result ID नहीं लौटाया।");
     lastResultId=rows[0].id;
-
     const ranks=await api("results","GET",null,
       "?select=id,score&test_id=eq."+encodeURIComponent(test.id)+"&exam_type=eq."+encodeURIComponent(selectedExam)+"&order=score.desc,id.asc");
-
-    const me=ranks.findIndex(x=>String(x.id)===String(lastResultId))+1;
-    show("result");
-    if($("totalMarksLabel")) $("totalMarksLabel").textContent=examConfig.totalMarks;
-    $("score").textContent=formatScore(score);
-    $("correct").textContent=c;
-    $("wrong").textContent=w;
-    $("skipped").textContent=s;
-    $("rank").textContent="आपकी Rank: "+(me>0?me:"—");
-
-    $("review").innerHTML=
-      `<p><b>${esc(examConfig.title)}</b> • कुल ${examConfig.totalMarks} अंक</p>`+
-      test.questions.map((q,k)=>`
-        <div class="${answers[k]===q.a?"right":"wrong"}">
-          <b>Q${k+1}. ${esc(q.q)}</b><br>
-          विद्यार्थी ने चुना: <b>${answers[k]===null?"कोई उत्तर नहीं":"ABCD"[answers[k]]+". "+esc(q.o[answers[k]])}</b><br>
-          सही उत्तर: <b>${"ABCD"[q.a]}. ${esc(q.o[q.a])}</b><br>
-          ${answers[k]===q.a
-            ?`✅ सही (+${examConfig.correctMarks})`
-            :answers[k]===null
-            ?"0 अंक"
-            :`❌ गलत (${examConfig.wrongMarks})`}
-        </div>
-      `).join("");
-  }catch(e){
-    submitted=false;
-    console.error("RESULT SAVE ERROR:",e);
-    alert("Result save नहीं हुआ: "+(e?.message||e));
+    rank=ranks.findIndex(x=>String(x.id)===String(lastResultId))+1;
+  }catch(remoteError){
+    try{
+      const local=readLocalResults();
+      const localId="LOCAL-RESULT-"+Date.now()+"-"+Math.floor(Math.random()*10000);
+      const row={...resultPayload,id:localId,localOnly:true,created_at:new Date().toISOString()};
+      local.push(row);writeLocalResults(local);
+      lastResultId=localId;localSaved=true;
+      const same=local.filter(x=>String(x.test_id)===String(test.id)&&x.exam_type===selectedExam)
+        .sort((a,b)=>Number(b.score)-Number(a.score));
+      rank=same.findIndex(x=>x.id===localId)+1;
+    }catch(storageError){
+      submitted=false;
+      alert("Result save nahi ho paya. Server error: "+(remoteError.message||remoteError)+"\nLocal storage error: "+(storageError.message||storageError));
+      return;
+    }
   }
+
+  show("result");
+  if($("totalMarksLabel"))$("totalMarksLabel").textContent=examConfig.totalMarks;
+  $("score").textContent=formatScore(score);
+  $("correct").textContent=c;$("wrong").textContent=w;$("skipped").textContent=s;
+  $("rank").textContent="आपकी Rank: "+(rank>0?rank:"—")+(localSaved?" (इस डिवाइस के परिणामों में)":"");
+  $("review").innerHTML=
+    `<p><b>${esc(examConfig.title)}</b> • कुल ${examConfig.totalMarks} अंक</p>`+
+    test.questions.map((q,k)=>`<div class="${answers[k]===q.a?"right":"wrong"}">
+      <b>Q${k+1}. ${esc(q.q)}</b><br>
+      विद्यार्थी ने चुना: <b>${answers[k]===null?"कोई उत्तर नहीं":"ABCD"[answers[k]]+". "+esc(q.o[answers[k]])}</b><br>
+      सही उत्तर: <b>${"ABCD"[q.a]}. ${esc(q.o[q.a])}</b><br>
+      ${answers[k]===q.a?`✅ सही (+${examConfig.correctMarks})`:answers[k]===null?"0 अंक":`❌ गलत (${examConfig.wrongMarks})`}
+    </div>`).join("");
+  if(localSaved)alert("आपका Result इस ब्राउज़र में सेव हो गया है। Supabase Server पर नहीं गया, इसलिए दूसरे डिवाइस पर नहीं दिखेगा।");
 }
 
 async function sendFeedback(){
-  const m=$("feedback").value.trim();
-  if(!m||!lastResultId)return;
-
+  const message=$("feedback").value.trim();
+  if(!message||!lastResultId)return;
   try{
-    await api(
-      "feedback",
-      "POST",
-      {result_id:lastResultId,message:m}
-    );
-    $("feedback").value="";
-    alert("Feedback भेज दिया गया।");
+    if(isLocalId(lastResultId))throw Error("Local result");
+    await api("feedback","POST",{result_id:lastResultId,message});
+    $("feedback").value="";alert("Feedback भेज दिया गया।");
   }catch(e){
-    console.error(e);
-    alert("Feedback save नहीं हुआ।");
+    try{
+      const list=readLocalFeedback();
+      list.push({result_id:lastResultId,message,created_at:new Date().toISOString()});
+      writeLocalFeedback(list);$("feedback").value="";
+      alert("Feedback इस डिवाइस में सेव हो गया है।");
+    }catch(storageError){alert("Feedback save नहीं हुआ: "+(storageError.message||storageError));}
   }
 }
 
@@ -548,48 +544,44 @@ function adminLogin(){
 }
 
 async function adminTests(){
-  // Import controls are rendered immediately, independently of the database.
-  // This prevents a temporary Supabase/network error from hiding JSON upload buttons.
   const body=$("adminBody");
   body.innerHTML=`
     <h3>Tests</h3>
     <button class="p" onclick="newTest()">+ नया Test जोड़ें</button>
     <button class="l" onclick="checkDatabaseConnection()">🔌 Database Connection Check</button>
-    <p id="dbConnectionStatus">Database connection अभी check नहीं हुआ है।</p>
-
+    <p id="dbConnectionStatus">Connection check नहीं किया गया।</p>
     <div class="importbox">
       <b>AIIMS Hospital Attendant</b><br>
       <button class="p" onclick="document.getElementById('aiimsJsonFile').click()">📥 AIIMS JSON Import</button>
       <input id="aiimsJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importExamJSON(event,'AIIMS')">
-      <br><br>
-      <b>RML Hospital Attendant</b><br>
+      <br><br><b>RML Hospital Attendant</b><br>
       <button class="g" onclick="document.getElementById('rmlJsonFile').click()">📥 RML JSON Import</button>
       <input id="rmlJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importExamJSON(event,'RML')">
-      <p>AIIMS की JSON फाइल AIIMS में और RML की JSON फाइल RML में Import होगी। प्रत्येक फाइल में 100 प्रश्न होने चाहिए।</p>
+      <p>दोनों फाइलें 100 प्रश्न वाली JSON फाइलें हैं। Server unavailable होने पर टेस्ट इसी ब्राउज़र में Local Save होगा।</p>
     </div>
-
     <p id="adminLoadStatus">टेस्ट सूची लोड हो रही है...</p>
-    <div id="testList"></div>
-  `;
+    <div id="testList"></div>`;
 
+  let remote=[];let error="";
   try{
-    const allTests=await api("tests","GET",null,"?select=id,name,duration,questions,published,exam_type&order=id.desc");
-    const r=(allTests||[]).filter(t=>Object.prototype.hasOwnProperty.call(EXAM_CONFIGS,t.exam_type));
-    $("testList").innerHTML=r.map(t=>`
-      <div class="card">
-        <b>${esc(t.name)}</b><br>
-        <b>Exam:</b> ${esc(EXAM_CONFIGS[t.exam_type]?.title||t.exam_type||"Unknown")} • ${t.published?"Published":"Draft"}<br>
-        ${t.questions?.length||0} प्रश्न • ${t.duration} मिनट<br>
-        <button class="l" onclick="toggle(${t.id},${!t.published})">${t.published?"Unpublish":"Publish"}</button>
-        <button class="d" onclick="deleteTest(${t.id})">Delete</button>
-      </div>
-    `).join("") || "<p>अभी कोई AIIMS या RML Test सेव नहीं है। ऊपर JSON Import से फाइल चुनें।</p>";
-    $("adminLoadStatus").textContent="टेस्ट सूची लोड हो गई। JSON Import विकल्प ऊपर उपलब्ध हैं।";
-  }catch(e){
-    console.error("ADMIN TEST LIST ERROR:",e);
-    $("adminLoadStatus").innerHTML="टेस्ट सूची लोड नहीं हुई: "+esc(e?.message||e)+"<br>JSON Import विकल्प ऊपर उपलब्ध हैं; डेटाबेस की समस्या के कारण सेव/लिस्ट में दिक्कत हो सकती है।";
-    $("testList").innerHTML="";
-  }
+    remote=await api("tests","GET",null,"?select=id,name,duration,questions,published,exam_type&order=id.desc");
+    remote=(remote||[]).filter(t=>Object.prototype.hasOwnProperty.call(EXAM_CONFIGS,t.exam_type));
+  }catch(e){error=e.message||String(e);}
+  const local=readLocalTests().map(t=>({...t,localOnly:true}));
+  const merged=[...remote,...local];
+  $("testList").innerHTML=merged.map(t=>`
+    <div class="card">
+      <b>${esc(t.name)}</b><br>
+      <b>Exam:</b> ${esc(EXAM_CONFIGS[t.exam_type]?.title||t.exam_type)} • ${t.published?"Published":"Draft"}<br>
+      ${t.questions?.length||0} प्रश्न • ${t.duration} मिनट<br>
+      ${t.localOnly?"<span class=\"sectionPill\">इस डिवाइस में Local Save</span>":"<span class=\"sectionPill\">Server</span>"}<br>
+      ${t.localOnly?`<button class="l" onclick="toggle('${t.id}',${!t.published})">${t.published?"Unpublish":"Publish"}</button>
+      <button class="d" onclick="deleteTest('${t.id}')">Delete</button>`:`<button class="l" onclick="toggle('${t.id}',${!t.published})">${t.published?"Unpublish":"Publish"}</button>
+      <button class="d" onclick="deleteTest('${t.id}')">Delete</button>`}
+    </div>`).join("")||"<p>अभी कोई AIIMS या RML Test सेव नहीं है।</p>";
+  $("adminLoadStatus").textContent=error
+    ? "⚠️ Server list नहीं खुली। Local tests दिखाए जा रहे हैं। Error: "+error
+    : "Server और Local test list लोड हो गई।";
 }
 
 function newTest(initialType="AIIMS"){
@@ -802,49 +794,50 @@ async function saveBuilder(publish){
     if(!config)throw Error("कृपया AIIMS या RML Exam चुनें।");
     const name=$("tname").value.trim()||(config.title+" - Test 1");
     const duration=config.sections*config.sectionSeconds/60;
-
     if(qs.length!==100)throw Error("Test में 100 प्रश्न होने चाहिए।");
+    const payload={name,duration,questions:qs,published:publish,exam_type:type};
 
-    await api("tests","POST",{name,duration,questions:qs,published:publish,exam_type:type});
-
-    alert(publish?"Test Publish हो गया।":"Test Draft में Save हो गया।");
+    try{
+      await api("tests","POST",payload);
+      alert(publish?"Test Server पर Save & Publish हो गया।":"Test Server पर Draft में Save हो गया।");
+    }catch(serverError){
+      const local=readLocalTests();
+      const localId="LOCAL-TEST-"+Date.now()+"-"+Math.floor(Math.random()*10000);
+      local.push({...payload,id:localId,localOnly:true,created_at:new Date().toISOString()});
+      writeLocalTests(local);
+      alert(
+        "Supabase Server पर Save नहीं हो पाया।\n\n"+
+        "लेकिन टेस्ट इस ब्राउज़र में Local रूप से "+(publish?"Publish":"Save")+" हो गया है।\n\n"+
+        "Server error: "+(serverError.message||String(serverError))+"\n\n"+
+        "ध्यान दें: Local टेस्ट केवल इसी ब्राउज़र/डिवाइस में दिखेगा, दूसरे लोगों को नहीं।"
+      );
+    }
     adminTests();
   }catch(e){
     console.error("SAVE TEST ERROR:",e);
-    alert("Save नहीं हुआ:\n\n"+(e&&e.message?e.message:String(e)));
+    alert("Test save नहीं हुआ: "+(e&&e.message?e.message:String(e)));
   }
 }
 
 async function toggle(id,v){
-  try{
-    await api(
-      "tests",
-      "PATCH",
-      {published:v},
-      "?id=eq."+id
-    );
-    adminTests();
-  }catch(e){
-    console.error(e);
-    alert("Publish बदल नहीं पाया।");
+  if(isLocalId(id)){
+    const list=readLocalTests();
+    const item=list.find(t=>String(t.id)===String(id));
+    if(item){item.published=!!v;writeLocalTests(list);}
+    adminTests();return;
   }
+  try{await api("tests","PATCH",{published:v},"?id=eq."+encodeURIComponent(id));adminTests();}
+  catch(e){alert("Server test update नहीं हुआ: "+(e.message||e));}
 }
 
 async function deleteTest(id){
   if(!confirm("क्या यह Test हटाना है?"))return;
-
-  try{
-    await api(
-      "tests",
-      "DELETE",
-      null,
-      "?id=eq."+id
-    );
-    adminTests();
-  }catch(e){
-    console.error(e);
-    alert("Delete नहीं हुआ।");
+  if(isLocalId(id)){
+    writeLocalTests(readLocalTests().filter(t=>String(t.id)!==String(id)));
+    adminTests();return;
   }
+  try{await api("tests","DELETE",null,"?id=eq."+encodeURIComponent(id));adminTests();}
+  catch(e){alert("Server test delete नहीं हुआ: "+(e.message||e));}
 }
 
 async function adminResults(filterExam=null){
@@ -891,7 +884,12 @@ async function adminResults(filterExam=null){
     $("adminBody").innerHTML=html+(sorted.length?"":"<p>अभी कोई Result नहीं है।</p>");
   }catch(e){
     console.error(e);
-    alert("Results नहीं आ रहे: "+(e?.message||e));
+    const local=readLocalResults().filter(x=>!filterExam||x.exam_type===filterExam)
+      .sort((a,b)=>Number(b.score)-Number(a.score));
+    let html=`<h3>Local Results / Rank</h3><p>ये परिणाम केवल इसी ब्राउज़र में सेव हैं।</p>`+
+      `<div class="sectionBar"><button class="l" onclick="adminResults()">सभी</button><button class="p" onclick="adminResults('AIIMS')">AIIMS</button><button class="g" onclick="adminResults('RML')">RML</button></div>`;
+    html+=local.map((x,i)=>`<div class="card"><b>Rank ${i+1} — ${esc(x.student_name)}</b><br>${esc(EXAM_CONFIGS[x.exam_type]?.title||x.exam_type)}<br>Score ${formatScore(x.score)} • सही ${x.correct} • गलत ${x.wrong} • छोड़े ${x.skipped}</div>`).join("")||"<p>अभी कोई Local Result नहीं है।</p>";
+    $("adminBody").innerHTML=html+`<p class="lockNote">Server error: ${esc(e?.message||e)}</p>`;
   }
 }
 
@@ -932,7 +930,10 @@ async function adminFeedback(){
 
   }catch(e){
     console.error(e);
-    alert("Feedback नहीं आ रहा।");
+    const local=readLocalFeedback();
+    $("adminBody").innerHTML="<h3>Local Feedback</h3>"+
+      (local.map(x=>`<div class="card">${esc(x.message)}</div>`).join("")||"<p>कोई Local Feedback नहीं है।</p>")+
+      `<p class="lockNote">Server error: ${esc(e?.message||e)}</p>`;
   }
 }
 
