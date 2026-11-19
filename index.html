@@ -507,36 +507,45 @@ function adminLogin(){
 }
 
 async function adminTests(){
+  // Import controls are rendered immediately, independently of the database.
+  // This prevents a temporary Supabase/network error from hiding JSON upload buttons.
+  const body=$("adminBody");
+  body.innerHTML=`
+    <h3>Tests</h3>
+    <button class="p" onclick="newTest()">+ नया Test जोड़ें</button>
+
+    <div class="importbox">
+      <b>AIIMS Hospital Attendant</b><br>
+      <button class="p" onclick="document.getElementById('aiimsJsonFile').click()">📥 AIIMS JSON Import</button>
+      <input id="aiimsJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importExamJSON(event,'AIIMS')">
+      <br><br>
+      <b>RML Hospital Attendant</b><br>
+      <button class="g" onclick="document.getElementById('rmlJsonFile').click()">📥 RML JSON Import</button>
+      <input id="rmlJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importExamJSON(event,'RML')">
+      <p>AIIMS की JSON फाइल AIIMS में और RML की JSON फाइल RML में Import होगी। प्रत्येक फाइल में 100 प्रश्न होने चाहिए।</p>
+    </div>
+
+    <p id="adminLoadStatus">टेस्ट सूची लोड हो रही है...</p>
+    <div id="testList"></div>
+  `;
+
   try{
     const allTests=await api("tests","GET",null,"?select=id,name,duration,questions,published,exam_type&order=id.desc");
     const r=(allTests||[]).filter(t=>Object.prototype.hasOwnProperty.call(EXAM_CONFIGS,t.exam_type));
-    $("adminBody").innerHTML=`
-      <h3>Tests</h3>
-      <button class="p" onclick="newTest()">+ नया Test जोड़ें</button>
-      <div class="importbox">
-        <b>AIIMS Hospital Attendant</b><br>
-        <button class="p" onclick="document.getElementById('aiimsJsonFile').click()">📥 AIIMS JSON Import</button>
-        <input id="aiimsJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importExamJSON(event,'AIIMS')">
-        <br><br>
-        <b>RML Hospital Attendant</b><br>
-        <button class="g" onclick="document.getElementById('rmlJsonFile').click()">📥 RML JSON Import</button>
-        <input id="rmlJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importExamJSON(event,'RML')">
-        <p>AIIMS की JSON फाइल AIIMS में और RML की JSON फाइल RML में Import होगी। प्रत्येक फाइल में 100 प्रश्न होने चाहिए।</p>
+    $("testList").innerHTML=r.map(t=>`
+      <div class="card">
+        <b>${esc(t.name)}</b><br>
+        <b>Exam:</b> ${esc(EXAM_CONFIGS[t.exam_type]?.title||t.exam_type||"Unknown")} • ${t.published?"Published":"Draft"}<br>
+        ${t.questions?.length||0} प्रश्न • ${t.duration} मिनट<br>
+        <button class="l" onclick="toggle(${t.id},${!t.published})">${t.published?"Unpublish":"Publish"}</button>
+        <button class="d" onclick="deleteTest(${t.id})">Delete</button>
       </div>
-      <div id="testList">
-        ${r.map(t=>`
-          <div class="card">
-            <b>${esc(t.name)}</b><br>
-            <b>Exam:</b> ${esc(EXAM_CONFIGS[t.exam_type]?.title||t.exam_type||"Unknown")} • ${t.published?"Published":"Draft"}<br>
-            ${t.questions?.length||0} प्रश्न • ${t.duration} मिनट<br>
-            <button class="l" onclick="toggle(${t.id},${!t.published})">${t.published?"Unpublish":"Publish"}</button>
-            <button class="d" onclick="deleteTest(${t.id})">Delete</button>
-          </div>
-        `).join("")}
-      </div>`;
+    `).join("") || "<p>अभी कोई AIIMS या RML Test सेव नहीं है। ऊपर JSON Import से फाइल चुनें।</p>";
+    $("adminLoadStatus").textContent="टेस्ट सूची लोड हो गई। JSON Import विकल्प ऊपर उपलब्ध हैं।";
   }catch(e){
-    console.error(e);
-    $("adminBody").innerHTML="Tests लोड नहीं हुए: "+esc(e?.message||e);
+    console.error("ADMIN TEST LIST ERROR:",e);
+    $("adminLoadStatus").innerHTML="टेस्ट सूची लोड नहीं हुई: "+esc(e?.message||e)+"<br>JSON Import विकल्प ऊपर उपलब्ध हैं; डेटाबेस की समस्या के कारण सेव/लिस्ट में दिक्कत हो सकती है।";
+    $("testList").innerHTML="";
   }
 }
 
