@@ -62,7 +62,6 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 <section id="student" class="hide card">
   <h3 id="studentExamTitle">विद्यार्थी की जानकारी</h3>
 
-  <input id="mobile" type="tel" maxlength="10" inputmode="numeric" placeholder="Mobile Number" oninput="loadStudentTests()">
   <input id="firstName" placeholder="First Name">
   <input id="lastName" placeholder="Last Name">
 
@@ -120,11 +119,11 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 
 <section id="admin" class="hide">
   <div class="card">
-    <h2>Owner / Admin</h2>
+    <h2>Owner / Admin (Local Admin)</h2>
     <button class="p" onclick="adminTests()">Tests</button>
     <button class="l" onclick="adminResults()">सभी Results / Rank</button>
     <button class="l" onclick="adminFeedback()">Feedback</button>
-    <button class="l" onclick="show('home')">Logout</button>
+    <button class="l" onclick="adminLogoutLocal()">Logout</button>
   </div>
   <div id="adminBody" class="card"></div>
 </section>
@@ -133,7 +132,7 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 
 <script>
 const SUPABASE_URL="https://dqumlteggtfygpssjtzk.supabase.co";
-const SUPABASE_ANON_KEY="sb_publishable_Rfvy1drDWb-fXgP37UdEAw_QWg0X_cu";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_Rfvy1drDWb-fXgP37UdEAw_QWg0X_cu";
 const ADMIN_CODE="8890";
 
 const EXAM_CONFIGS={
@@ -158,6 +157,7 @@ const LOCAL_RESULTS_KEY="aiims_rml_local_results_v1";
 const LOCAL_FEEDBACK_KEY="aiims_rml_local_feedback_v1";
 
 let tests=[],test=null,idx=0,answers=[],lastResultId=null;
+let adminToken=null,adminEmail="";
 let sectionIndex=0,sectionEnd=0,sectionTimerRunning=false,submitted=false;
 
 const $=x=>document.getElementById(x);
@@ -167,35 +167,97 @@ function show(x){
   $(x).classList.remove("hide");
 }
 
-async function api(t,m="GET",b=null,q=""){
-  const url=SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/"+t+q;
-  // Keep the same headers as the original working app for compatibility
-  // with the existing Supabase project and its current RLS setup.
-  const h={
-    "apikey":SUPABASE_ANON_KEY,
-    "Authorization":"Bearer "+SUPABASE_ANON_KEY,
-    "Content-Type":"application/json",
-    "Prefer":"return=representation"
-  };
-  let r;
-  try{
-    r=await fetch(url,{
-      method:m,
-      headers:h,
-      body:b!==null?JSON.stringify(b):null
-    });
-  }catch(e){
-    const reason=(e&&e.message)?e.message:"Network/CORS/Project connection error";
-    throw Error("Supabase se connection nahi hua: "+reason+".\nURL: "+url+"\nCheck: internet, Supabase project status, project URL/key aur website hosting origin.");
+function makeConnectionHint(error, url=""){
+  const msg=String(error?.message||error||"Unknown error");
+  const pageProtocol=window.location?.protocol||"unknown";
+  const pageOrigin=window.location?.origin||"unknown";
+  if(pageProtocol==="file:"){
+    return msg+"\nकारण: ऐप file:// से खुला है। इसे HTTPS वेबसाइट/hosting से खोलें, सीधे computer की file से नहीं।\nCurrent origin: "+pageOrigin;
   }
-  const raw=await r.text();
+  if(/Failed to fetch|NetworkError|Load failed/i.test(msg)){
+    return msg+"\nकारण: Browser को Supabase से HTTP response नहीं मिला। सम्भावित कारण: internet/DNS, Supabase project/API URL, hosting CORS/origin, या browser extension/network block.\nWebsite origin: "+pageOrigin;
+  }
+  if(/HTTP 401/.test(msg)) return msg+"\nजाँच: Supabase publishable key और project URL एक ही project के हों।";
+  if(/HTTP 403/.test(msg)) return msg+"\nजाँच: RLS/Database permissions के लिए साथ दी गई SQL setup file चलाएँ।";
+  if(/HTTP 404/.test(msg)) return msg+"\nजाँच: public.tests या requested API/table मौजूद नहीं है; SQL setup file चलाएँ।";
+  if(/HTTP 5\d\d/.test(msg)) return msg+"\nजाँच: Supabase project/service में server-side समस्या हो सकती है।";
+  return msg;
+}
+
+async function api(table,method="GET",body=null,query=""){
+  if(!/^(tests|results|feedback|app_admins)$/.test(table)) throw Error("Invalid API table");
+  const url=SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/"+table+query;
+  const headers={"apikey":SUPABASE_PUBLISHABLE_KEY,"Accept":"application/json"};
+  if(adminToken) headers["Authorization"]="Bearer "+adminToken;
+  if(body!==null){
+    headers["Content-Type"]="application/json";
+    headers["Prefer"]="return=minimal";
+  }
+  let response;
+  try{
+    response=await fetch(url,{
+      method,
+      mode:"cors",
+      credentials:"omit",
+      cache:"no-store",
+      headers,
+      body:body!==null?JSON.stringify(body):null
+    });
+  }catch(error){
+    throw Error(makeConnectionHint(error,url));
+  }
+  const raw=await response.text();
   let data=null;
   if(raw){try{data=JSON.parse(raw)}catch(_){data=raw}}
-  if(!r.ok){
-    const detail=typeof data==="string"?data:JSON.stringify(data);
-    throw Error("Supabase HTTP "+r.status+": "+detail);
+  if(!response.ok){
+    const details=typeof data==="string"?data:JSON.stringify(data);
+    throw Error("Supabase HTTP "+response.status+": "+details);
   }
   return data;
+}
+
+async function serverAdminLogin(){
+  const email=$("serverAdminEmail")?.value.trim();
+  const password=$("serverAdminPassword")?.value;
+  const status=$("serverAuthStatus");
+  if(!email||!password){alert("Supabase Admin Email और Password भरें।");return;}
+  if(status)status.textContent="Server Admin login हो रहा है...";
+  try{
+    let response;
+    try{
+      response=await fetch(SUPABASE_URL.replace(/\/$/,"")+"/auth/v1/token?grant_type=password",{
+        method:"POST",mode:"cors",credentials:"omit",cache:"no-store",
+        headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json","Accept":"application/json"},
+        body:JSON.stringify({email,password})
+      });
+    }catch(error){throw Error(makeConnectionHint(error,SUPABASE_URL+"/auth/v1/token?grant_type=password"));}
+    const raw=await response.text();
+    let data={};try{data=raw?JSON.parse(raw):{}}catch(_){data={message:raw}}
+    if(!response.ok)throw Error("Supabase Auth HTTP "+response.status+": "+(data.msg||data.message||data.error_description||raw));
+    if(!data.access_token||!data.user?.id)throw Error("Supabase ने valid Admin session नहीं लौटाया।");
+    adminToken=data.access_token;
+    adminEmail=data.user.email||email;
+    const rows=await api("app_admins","GET",null,"?select=user_id&user_id=eq."+encodeURIComponent(data.user.id));
+    if(!Array.isArray(rows)||!rows.length){adminToken=null;adminEmail="";throw Error("यह Email अभी app_admins में Admin नहीं है। Supabase SQL setup file में YOUR_ADMIN_EMAIL_HERE को इसी email से बदलकर SQL चलाएँ।");}
+    if(status)status.textContent="✅ Online Admin login सफल: "+adminEmail;
+    alert("Supabase Online Admin Login सफल हो गया। अब Test Server पर Save/Publish होगा।");
+    await adminTests();
+  }catch(error){
+    adminToken=null;adminEmail="";
+    const msg=error.message||String(error);
+    if(status)status.textContent="❌ "+msg;
+    alert("Online Admin Login नहीं हुआ:\n\n"+msg);
+  }
+}
+
+function serverAdminLogout(){
+  adminToken=null;adminEmail="";
+  adminTests();
+}
+
+function adminLogoutLocal(){
+  adminToken=null;adminEmail="";
+  show("home");
 }
 
 function readLocalTests(){
@@ -229,18 +291,18 @@ function isLocalId(id){return String(id).startsWith("LOCAL-")}
 
 async function checkDatabaseConnection(){
   const status=$("dbConnectionStatus");
-  if(status)status.textContent="Database connection check ho raha hai...";
+  if(status)status.textContent="Supabase project, REST API और tests table जाँचे जा रहे हैं...";
   try{
-    await api("tests","GET",null,"?select=id&limit=1");
-    if(status)status.textContent="✅ Supabase connection successful.";
-    alert("Supabase connection successful hai.");
-  }catch(e){
-    const msg=e&&e.message?e.message:String(e);
-    if(status)status.textContent="❌ "+msg;
-    alert("Supabase connection abhi available nahi hai. Local save mode bhi enabled hai.\n\n"+msg);
+    const rows=await api("tests","GET",null,"?select=id&limit=1");
+    const message="✅ Supabase REST connection सफल। tests table accessible है। Rows returned: "+(Array.isArray(rows)?rows.length:"unknown");
+    if(status)status.textContent=message;
+    alert(message);
+  }catch(error){
+    const message=error.message||String(error);
+    if(status)status.textContent="❌ "+message;
+    alert("Supabase connection check असफल:\n\n"+message);
   }
 }
-
 function chooseExam(type){
   if(!EXAM_CONFIGS[type])return alert("कृपया AIIMS या RML चुनें।");
   selectedExam=type;
@@ -250,43 +312,26 @@ function chooseExam(type){
 }
 
 async function loadStudentTests(){
-  const mobile=$("mobile").value.trim();
   const localTests=readLocalTests().filter(t=>t.exam_type===selectedExam && t.published!==false);
   let remoteTests=[];
-  let remoteResults=[];
   let serverMessage="";
   try{
     remoteTests=await api("tests","GET",null,
       "?select=id,name,duration,questions,exam_type&published=eq.true&exam_type=eq."+
       encodeURIComponent(selectedExam)+"&order=id.desc");
-  }catch(e){
-    serverMessage=e.message||String(e);
-  }
-  if(/^\d{10}$/.test(mobile)){
-    try{
-      remoteResults=await api("results","GET",null,
-        "?select=id,test_id,score,correct,wrong,skipped,exam_type&mobile=eq."+
-        encodeURIComponent(mobile)+"&exam_type=eq."+encodeURIComponent(selectedExam)+"&order=id.asc");
-    }catch(e){/* local results are still available */}
-  }
+  }catch(error){serverMessage=error.message||String(error);}
   tests=[...(remoteTests||[]),...localTests];
-  const localResults=readLocalResults().filter(r=>r.mobile===mobile && r.exam_type===selectedExam);
-  const completedByTest={};
-  [...(remoteResults||[]),...localResults].forEach(r=>{completedByTest[String(r.test_id)]=r;});
   const localNote=serverMessage
-    ? `<p class="lockNote">⚠️ Server connection उपलब्ध नहीं है। इस डिवाइस में Local Save किए गए टेस्ट दिखाए जा रहे हैं।</p>`
+    ? `<p class="lockNote">⚠️ Online server उपलब्ध नहीं है। Local Save किए गए टेस्ट नीचे दिखाए जा रहे हैं।</p>`
     : "";
-  $("tests").innerHTML=localNote+(tests.map(t=>{
-    const done=completedByTest[String(t.id)];
-    return `<div class="card">
+  $("tests").innerHTML=localNote+(tests.map(t=>`
+    <div class="card">
       <b>${esc(t.name)}</b>${t.localOnly?` <span class="sectionPill">इस डिवाइस पर सेव</span>`:""}<br>
       ${Array.isArray(t.questions)?t.questions.length:0} प्रश्न<br>
       ${examConfig.pattern}<br>कुल ${examConfig.totalMarks} अंक<br><br>
-      ${done?`<div class="right">✅ यह टेस्ट पहले दिया जा चुका है<br>Score: <b>${formatScore(done.score)}</b> • सही ${done.correct} • गलत ${done.wrong} • छोड़े ${done.skipped}</div>`:`<button class="p" onclick="start('${String(t.id).replace(/'/g,"\\'")}')">▶️ Test शुरू करें</button>`}
-    </div>`;
-  }).join("")) || localNote+"<p>इस Exam का कोई Published Test नहीं है। Admin में JSON Import करके Save & Publish करें।</p>";
+      <button class="p" onclick="start('${String(t.id).replace(/'/g,"\\'")}')">▶️ Test शुरू करें</button>
+    </div>`).join("")) || localNote+"<p>इस Exam का कोई Published Test नहीं है। Owner/Admin में JSON Import करके Save & Publish करें।</p>";
 }
-
 async function student(){
   show("student");
   $("studentExamTitle").textContent=examConfig.title+" — विद्यार्थी की जानकारी";
@@ -295,11 +340,9 @@ async function student(){
 }
 
 function start(id){
-  const mobile=$("mobile").value.trim();
   const firstName=$("firstName").value.trim();
   const lastName=$("lastName").value.trim();
 
-  if(!/^\d{10}$/.test(mobile)) return alert("कृपया 10 अंकों का Mobile Number डालें");
   if(!firstName) return alert("First Name लिखें");
   if(!lastName) return alert("Last Name लिखें");
 
@@ -464,92 +507,108 @@ async function submitTest(auto=false){
   if(submitted)return;
   if(sectionIndex!==examConfig.sections-1)return alert("आखिरी Section पूरा होने के बाद ही Test Submit होगा।");
   if(!auto&&!confirm("क्या पूरा Test Submit करना है?"))return;
-  submitted=true;
-  sectionTimerRunning=false;
-
-  let c=0,w=0,s=0;
-  answers.forEach((v,k)=>{if(v===null)s++;else if(v===test.questions[k].a)c++;else w++;});
-  const score=Number((c*examConfig.correctMarks+w*examConfig.wrongMarks).toFixed(2));
-  const reviewData=test.questions.map((q,k)=>({user:answers[k],correctIndex:q.a,correct:answers[k]===q.a}));
-  const resultPayload={
-    test_id:test.id,exam_type:selectedExam,
-    student_name:($("firstName").value.trim()+" "+$("lastName").value.trim()).trim(),
-    mobile:$('mobile').value.trim(),score,correct:c,wrong:w,skipped:s,
+  submitted=true;sectionTimerRunning=false;
+  let correctCount=0,wrongCount=0,skippedCount=0;
+  answers.forEach((value,index)=>{
+    if(value===null)skippedCount++;
+    else if(value===test.questions[index].a)correctCount++;
+    else wrongCount++;
+  });
+  const score=Number((correctCount*examConfig.correctMarks+wrongCount*examConfig.wrongMarks).toFixed(2));
+  const reviewData=test.questions.map((q,index)=>({user:answers[index],correctIndex:q.a,correct:answers[index]===q.a}));
+  const studentName=($("firstName").value.trim()+" "+$("lastName").value.trim()).trim();
+  const payload={
+    test_id:Number(test.id),exam_type:selectedExam,student_name:studentName,
+    score,correct:correctCount,wrong:wrongCount,skipped:skippedCount,
     answers:answers,review:reviewData
   };
-  let rank=0,localSaved=false;
-  try{
-    if(test.localOnly)throw Error("यह टेस्ट अभी केवल इस डिवाइस में सेव है।");
-    const rows=await api("results","POST",resultPayload);
-    if(!Array.isArray(rows)||!rows[0]||rows[0].id==null)throw Error("Database ने Result ID नहीं लौटाया।");
-    lastResultId=rows[0].id;
-    const ranks=await api("results","GET",null,
-      "?select=id,score&test_id=eq."+encodeURIComponent(test.id)+"&exam_type=eq."+encodeURIComponent(selectedExam)+"&order=score.desc,id.asc");
-    rank=ranks.findIndex(x=>String(x.id)===String(lastResultId))+1;
-  }catch(remoteError){
+  let serverSaved=false,localSaved=false,serverError=null,rank=0;
+  if(!test.localOnly){
+    try{
+      await api("results","POST",payload);
+      serverSaved=true;
+    }catch(error){serverError=error;}
+  }else{
+    serverError=Error("यह टेस्ट केवल इस डिवाइस में सेव है।");
+  }
+  if(!serverSaved){
     try{
       const local=readLocalResults();
       const localId="LOCAL-RESULT-"+Date.now()+"-"+Math.floor(Math.random()*10000);
-      const row={...resultPayload,id:localId,localOnly:true,created_at:new Date().toISOString()};
-      local.push(row);writeLocalResults(local);
-      lastResultId=localId;localSaved=true;
-      const same=local.filter(x=>String(x.test_id)===String(test.id)&&x.exam_type===selectedExam)
+      local.push({...payload,test_id:test.id,id:localId,localOnly:true,created_at:new Date().toISOString()});
+      writeLocalResults(local);lastResultId=localId;localSaved=true;
+      const same=local.filter(row=>String(row.test_id)===String(test.id)&&row.exam_type===selectedExam)
         .sort((a,b)=>Number(b.score)-Number(a.score));
-      rank=same.findIndex(x=>x.id===localId)+1;
+      rank=same.findIndex(row=>row.id===localId)+1;
     }catch(storageError){
       submitted=false;
-      alert("Result save nahi ho paya. Server error: "+(remoteError.message||remoteError)+"\nLocal storage error: "+(storageError.message||storageError));
+      alert("Result save नहीं हो पाया। Server error: "+(serverError?.message||serverError)+"\nLocal storage error: "+(storageError.message||storageError));
       return;
     }
   }
-
   show("result");
   if($("totalMarksLabel"))$("totalMarksLabel").textContent=examConfig.totalMarks;
   $("score").textContent=formatScore(score);
-  $("correct").textContent=c;$("wrong").textContent=w;$("skipped").textContent=s;
-  $("rank").textContent="आपकी Rank: "+(rank>0?rank:"—")+(localSaved?" (इस डिवाइस के परिणामों में)":"");
+  $("correct").textContent=correctCount;$("wrong").textContent=wrongCount;$("skipped").textContent=skippedCount;
+  $("rank").textContent=serverSaved
+    ? "✅ Result Online Server पर जमा हो गया। पूरी Rank Owner/Admin के Results में दिखाई देगी।"
+    : "इस डिवाइस की Local Rank: "+rank;
   $("review").innerHTML=
     `<p><b>${esc(examConfig.title)}</b> • कुल ${examConfig.totalMarks} अंक</p>`+
-    test.questions.map((q,k)=>`<div class="${answers[k]===q.a?"right":"wrong"}">
-      <b>Q${k+1}. ${esc(q.q)}</b><br>
-      विद्यार्थी ने चुना: <b>${answers[k]===null?"कोई उत्तर नहीं":"ABCD"[answers[k]]+". "+esc(q.o[answers[k]])}</b><br>
+    test.questions.map((q,index)=>`<div class="${answers[index]===q.a?"right":"wrong"}">
+      <b>Q${index+1}. ${esc(q.q)}</b><br>
+      विद्यार्थी ने चुना: <b>${answers[index]===null?"कोई उत्तर नहीं":"ABCD"[answers[index]]+". "+esc(q.o[answers[index]])}</b><br>
       सही उत्तर: <b>${"ABCD"[q.a]}. ${esc(q.o[q.a])}</b><br>
-      ${answers[k]===q.a?`✅ सही (+${examConfig.correctMarks})`:answers[k]===null?"0 अंक":`❌ गलत (${examConfig.wrongMarks})`}
+      ${answers[index]===q.a?`✅ सही (+${examConfig.correctMarks})`:answers[index]===null?"0 अंक":`❌ गलत (${examConfig.wrongMarks})`}
     </div>`).join("");
-  if(localSaved)alert("आपका Result इस ब्राउज़र में सेव हो गया है। Supabase Server पर नहीं गया, इसलिए दूसरे डिवाइस पर नहीं दिखेगा।");
+  if(localSaved)alert("यह Result केवल इसी ब्राउज़र में सेव हुआ है। Online Result के लिए Supabase connection और SQL setup सफल होना चाहिए।\n\nServer: "+(serverError?.message||"Local test"));
 }
-
 async function sendFeedback(){
   const message=$("feedback").value.trim();
-  if(!message||!lastResultId)return;
+  if(!message||!test)return;
+  const payload={test_id:test.localOnly?null:Number(test.id),exam_type:selectedExam,message};
   try{
-    if(isLocalId(lastResultId))throw Error("Local result");
-    await api("feedback","POST",{result_id:lastResultId,message});
-    $("feedback").value="";alert("Feedback भेज दिया गया।");
-  }catch(e){
+    if(test.localOnly)throw Error("Local test");
+    await api("feedback","POST",payload);
+    $("feedback").value="";
+    alert("Feedback Online Server पर भेज दिया गया।");
+  }catch(error){
     try{
       const list=readLocalFeedback();
-      list.push({result_id:lastResultId,message,created_at:new Date().toISOString()});
+      list.push({...payload,created_at:new Date().toISOString()});
       writeLocalFeedback(list);$("feedback").value="";
-      alert("Feedback इस डिवाइस में सेव हो गया है।");
+      alert("Feedback इस डिवाइस में सेव हो गया है। Server: "+(error.message||error));
     }catch(storageError){alert("Feedback save नहीं हुआ: "+(storageError.message||storageError));}
   }
 }
-
 function adminLogin(){
-  if(prompt("Owner Code")!==ADMIN_CODE)
-    return alert("गलत Owner Code");
-  show("admin");
-  adminTests();
+  // This code opens the local admin interface only. Online database writes
+  // additionally require a real Supabase Auth account added by the SQL setup.
+  if(prompt("Local Owner Code")!==ADMIN_CODE)return alert("गलत Owner Code");
+  show("admin");adminTests();
+}
+
+function serverAdminBox(){
+  if(adminToken){
+    return `<div class="card"><b>✅ Server Admin Connected</b><br>${esc(adminEmail)}<br>
+      <button class="l" onclick="serverAdminLogout()">Server Admin Logout</button></div>`;
+  }
+  return `<div class="card">
+    <h3>Online Database Admin Login</h3>
+    <p>Server पर Test Save/Publish और Online Results देखने के लिए Supabase Admin Email/Password से login करें।</p>
+    <label>Supabase Admin Email</label><input id="serverAdminEmail" type="email" autocomplete="username" placeholder="आपका Admin Email">
+    <label>Supabase Admin Password</label><input id="serverAdminPassword" type="password" autocomplete="current-password" placeholder="आपका Admin Password">
+    <button class="p" onclick="serverAdminLogin()">Online Admin Login</button>
+    <p id="serverAuthStatus">Login नहीं किया गया। बिना login के टेस्ट Local Save होगा।</p>
+  </div>`;
 }
 
 async function adminTests(){
   const body=$("adminBody");
-  body.innerHTML=`
-    <h3>Tests</h3>
+  body.innerHTML=`<h3>Tests</h3>${serverAdminBox()}
     <button class="p" onclick="newTest()">+ नया Test जोड़ें</button>
     <button class="l" onclick="checkDatabaseConnection()">🔌 Database Connection Check</button>
-    <p id="dbConnectionStatus">Connection check नहीं किया गया।</p>
+    <p id="dbConnectionStatus">Connection check नहीं किया गया। Website HTTPS hosting पर खुली होनी चाहिए।</p>
     <div class="importbox">
       <b>AIIMS Hospital Attendant</b><br>
       <button class="p" onclick="document.getElementById('aiimsJsonFile').click()">📥 AIIMS JSON Import</button>
@@ -557,33 +616,29 @@ async function adminTests(){
       <br><br><b>RML Hospital Attendant</b><br>
       <button class="g" onclick="document.getElementById('rmlJsonFile').click()">📥 RML JSON Import</button>
       <input id="rmlJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importExamJSON(event,'RML')">
-      <p>दोनों फाइलें 100 प्रश्न वाली JSON फाइलें हैं। Server unavailable होने पर टेस्ट इसी ब्राउज़र में Local Save होगा।</p>
+      <p>Server Admin Login होने पर टेस्ट Online Save होंगे। Login न हो तो इसी Browser में Local Save होंगे।</p>
     </div>
-    <p id="adminLoadStatus">टेस्ट सूची लोड हो रही है...</p>
-    <div id="testList"></div>`;
-
-  let remote=[];let error="";
+    <p id="adminLoadStatus">टेस्ट सूची लोड हो रही है...</p><div id="testList"></div>`;
+  let remote=[],error="";
   try{
     remote=await api("tests","GET",null,"?select=id,name,duration,questions,published,exam_type&order=id.desc");
     remote=(remote||[]).filter(t=>Object.prototype.hasOwnProperty.call(EXAM_CONFIGS,t.exam_type));
   }catch(e){error=e.message||String(e);}
   const local=readLocalTests().map(t=>({...t,localOnly:true}));
   const merged=[...remote,...local];
-  $("testList").innerHTML=merged.map(t=>`
-    <div class="card">
-      <b>${esc(t.name)}</b><br>
+  const list=$("testList");
+  if(list)list.innerHTML=merged.map(t=>`
+    <div class="card"><b>${esc(t.name)}</b><br>
       <b>Exam:</b> ${esc(EXAM_CONFIGS[t.exam_type]?.title||t.exam_type)} • ${t.published?"Published":"Draft"}<br>
       ${t.questions?.length||0} प्रश्न • ${t.duration} मिनट<br>
       ${t.localOnly?"<span class=\"sectionPill\">इस डिवाइस में Local Save</span>":"<span class=\"sectionPill\">Server</span>"}<br>
-      ${t.localOnly?`<button class="l" onclick="toggle('${t.id}',${!t.published})">${t.published?"Unpublish":"Publish"}</button>
-      <button class="d" onclick="deleteTest('${t.id}')">Delete</button>`:`<button class="l" onclick="toggle('${t.id}',${!t.published})">${t.published?"Unpublish":"Publish"}</button>
-      <button class="d" onclick="deleteTest('${t.id}')">Delete</button>`}
+      <button class="l" onclick="toggle('${String(t.id)}',${!t.published})">${t.published?"Unpublish":"Publish"}</button>
+      <button class="d" onclick="deleteTest('${String(t.id)}')">Delete</button>
     </div>`).join("")||"<p>अभी कोई AIIMS या RML Test सेव नहीं है।</p>";
-  $("adminLoadStatus").textContent=error
-    ? "⚠️ Server list नहीं खुली। Local tests दिखाए जा रहे हैं। Error: "+error
-    : "Server और Local test list लोड हो गई।";
+  const status=$("adminLoadStatus");
+  if(status)status.textContent=error?"⚠️ Server list नहीं खुली। Local tests दिखाए जा रहे हैं। Error: "+error:
+    (adminToken?"✅ Online Server और Local Test list लोड हो गई।":"Server की public list और Local tests लोड हो गए। Online editing के लिए ऊपर Admin Login करें।");
 }
-
 function newTest(initialType="AIIMS"){
   $("adminBody").innerHTML=`
     <h3>नया 100 प्रश्न वाला Test</h3>
@@ -788,114 +843,96 @@ function collectBuilder(){
 
 async function saveBuilder(publish){
   try{
-    const qs=collectBuilder();
+    const questions=collectBuilder();
     const type=$("examType").value;
     const config=EXAM_CONFIGS[type];
     if(!config)throw Error("कृपया AIIMS या RML Exam चुनें।");
     const name=$("tname").value.trim()||(config.title+" - Test 1");
     const duration=config.sections*config.sectionSeconds/60;
-    if(qs.length!==100)throw Error("Test में 100 प्रश्न होने चाहिए।");
-    const payload={name,duration,questions:qs,published:publish,exam_type:type};
-
-    try{
-      await api("tests","POST",payload);
-      alert(publish?"Test Server पर Save & Publish हो गया।":"Test Server पर Draft में Save हो गया।");
-    }catch(serverError){
+    if(questions.length!==100)throw Error("Test में 100 प्रश्न होने चाहिए।");
+    const payload={name,duration,questions,published:!!publish,exam_type:type};
+    let onlineSaved=false,serverError=null;
+    if(adminToken){
+      try{await api("tests","POST",payload);onlineSaved=true;}
+      catch(error){serverError=error;}
+    }else{
+      serverError=Error("Online Server Admin Login नहीं किया गया।");
+    }
+    if(onlineSaved){
+      alert(publish?"Test Supabase Server पर Save & Publish हो गया।":"Test Supabase Server पर Draft में Save हो गया।");
+    }else{
       const local=readLocalTests();
       const localId="LOCAL-TEST-"+Date.now()+"-"+Math.floor(Math.random()*10000);
       local.push({...payload,id:localId,localOnly:true,created_at:new Date().toISOString()});
       writeLocalTests(local);
-      alert(
-        "Supabase Server पर Save नहीं हो पाया।\n\n"+
-        "लेकिन टेस्ट इस ब्राउज़र में Local रूप से "+(publish?"Publish":"Save")+" हो गया है।\n\n"+
-        "Server error: "+(serverError.message||String(serverError))+"\n\n"+
-        "ध्यान दें: Local टेस्ट केवल इसी ब्राउज़र/डिवाइस में दिखेगा, दूसरे लोगों को नहीं।"
-      );
+      alert("Test इस Browser में Local Save हो गया है।\n\nOnline Server पर Save नहीं हुआ।\nकारण: "+(serverError?.message||serverError)+"\n\nदूसरे लोगों को दिखाने के लिए Supabase Admin Login और connection ठीक होना जरूरी है।");
     }
-    adminTests();
-  }catch(e){
-    console.error("SAVE TEST ERROR:",e);
-    alert("Test save नहीं हुआ: "+(e&&e.message?e.message:String(e)));
+    await adminTests();
+  }catch(error){
+    console.error("SAVE TEST ERROR:",error);
+    alert("Test save नहीं हुआ: "+(error.message||String(error)));
   }
 }
 
-async function toggle(id,v){
+async function toggle(id,value){
   if(isLocalId(id)){
-    const list=readLocalTests();
-    const item=list.find(t=>String(t.id)===String(id));
-    if(item){item.published=!!v;writeLocalTests(list);}
-    adminTests();return;
+    const list=readLocalTests();const item=list.find(t=>String(t.id)===String(id));
+    if(item){item.published=!!value;writeLocalTests(list);}await adminTests();return;
   }
-  try{await api("tests","PATCH",{published:v},"?id=eq."+encodeURIComponent(id));adminTests();}
-  catch(e){alert("Server test update नहीं हुआ: "+(e.message||e));}
+  if(!adminToken)return alert("Online Test बदलने के लिए पहले Online Admin Login करें।");
+  try{await api("tests","PATCH",{published:!!value},"?id=eq."+encodeURIComponent(id));await adminTests();}
+  catch(error){alert("Server test update नहीं हुआ: "+(error.message||error));}
 }
 
 async function deleteTest(id){
   if(!confirm("क्या यह Test हटाना है?"))return;
   if(isLocalId(id)){
-    writeLocalTests(readLocalTests().filter(t=>String(t.id)!==String(id)));
-    adminTests();return;
+    writeLocalTests(readLocalTests().filter(t=>String(t.id)!==String(id)));await adminTests();return;
   }
-  try{await api("tests","DELETE",null,"?id=eq."+encodeURIComponent(id));adminTests();}
-  catch(e){alert("Server test delete नहीं हुआ: "+(e.message||e));}
+  if(!adminToken)return alert("Online Test हटाने के लिए पहले Online Admin Login करें।");
+  try{await api("tests","DELETE",null,"?id=eq."+encodeURIComponent(id));await adminTests();}
+  catch(error){alert("Server test delete नहीं हुआ: "+(error.message||error));}
 }
 
 async function adminResults(filterExam=null){
+  if(!adminToken){
+    const local=readLocalResults().filter(row=>!filterExam||row.exam_type===filterExam)
+      .sort((a,b)=>Number(b.score)-Number(a.score));
+    const html=`<h3>Local Results / Rank</h3><p>ये परिणाम केवल इसी Browser में सेव हैं। Online Results देखने के लिए ऊपर Supabase Admin Login करें।</p>
+      <div class="sectionBar"><button class="l" onclick="adminResults()">सभी</button><button class="p" onclick="adminResults('AIIMS')">AIIMS</button><button class="g" onclick="adminResults('RML')">RML</button></div>`+
+      (local.map((row,index)=>`<div class="card"><b>Local Rank ${index+1} — ${esc(row.student_name)}</b><br>${esc(EXAM_CONFIGS[row.exam_type]?.title||row.exam_type)}<br>Score ${formatScore(row.score)} • सही ${row.correct} • गलत ${row.wrong} • छोड़े ${row.skipped}</div>`).join("")||"<p>अभी कोई Local Result नहीं है।</p>");
+    $("adminBody").innerHTML=html;return;
+  }
   try{
     const params=filterExam
-      ? "?select=id,test_id,exam_type,student_name,mobile,score,correct,wrong,skipped,answers,review,created_at&exam_type=eq."+encodeURIComponent(filterExam)+"&order=test_id.asc,score.desc,id.asc"
-      : "?select=id,test_id,exam_type,student_name,mobile,score,correct,wrong,skipped,answers,review,created_at&order=exam_type.asc,test_id.asc,score.desc,id.asc";
-    const r=await api("results","GET",null,params);
-    const sorted=(r||[]).filter(x=>Object.prototype.hasOwnProperty.call(EXAM_CONFIGS,x.exam_type))
+      ? "?select=id,test_id,exam_type,student_name,score,correct,wrong,skipped,answers,review,created_at&exam_type=eq."+encodeURIComponent(filterExam)+"&order=test_id.asc,score.desc,id.asc"
+      : "?select=id,test_id,exam_type,student_name,score,correct,wrong,skipped,answers,review,created_at&order=exam_type.asc,test_id.asc,score.desc,id.asc";
+    const rows=await api("results","GET",null,params);
+    const sorted=(rows||[]).filter(row=>Object.prototype.hasOwnProperty.call(EXAM_CONFIGS,row.exam_type))
       .sort((a,b)=>String(a.exam_type).localeCompare(String(b.exam_type))||Number(a.test_id)-Number(b.test_id)||Number(b.score)-Number(a.score)||Number(a.id)-Number(b.id));
-
-    const testNames={};
-    for(const t of (await api("tests","GET",null,"?select=id,name"))) testNames[String(t.id)]=t.name;
-
-    const groups={};
-    sorted.forEach(x=>{
-      const key=String(x.exam_type||"AIIMS")+"|"+String(x.test_id);
-      (groups[key]??=[]).push(x);
-    });
-
-    let html=`
-      <h3>सभी Results / Rank</h3>
-      <div class="sectionBar">
-        <button class="l" onclick="adminResults()">सभी</button>
-        <button class="p" onclick="adminResults('AIIMS')">AIIMS Hospital Attendant</button>
-        <button class="g" onclick="adminResults('RML')">RML Hospital Attendant</button>
-      </div>`;
-
+    const testsList=await api("tests","GET",null,"?select=id,name");
+    const testNames={};for(const item of (testsList||[]))testNames[String(item.id)]=item.name;
+    const groups={};sorted.forEach(row=>{const key=String(row.exam_type)+"|"+String(row.test_id);(groups[key]??=[]).push(row);});
+    let html=`<h3>Online Results / Rank</h3><div class="sectionBar">
+      <button class="l" onclick="adminResults()">सभी</button><button class="p" onclick="adminResults('AIIMS')">AIIMS Hospital Attendant</button><button class="g" onclick="adminResults('RML')">RML Hospital Attendant</button></div>`;
     Object.keys(groups).forEach(key=>{
-      const rows=groups[key];
-      const testId=rows[0].test_id;
-      const examType=rows[0].exam_type||"AIIMS";
-      html+=`<div class="card"><h3>${esc(examType)} — ${esc(testNames[String(testId)]||("Test "+testId))}</h3>`;
-      html+=`<table><tr><th>Rank</th><th>नाम</th><th>Mobile</th><th>अंक</th><th>सही</th><th>गलत</th><th>छोड़े</th><th>Details</th></tr>`;
-      rows.forEach((x,i)=>{
-        html+=`<tr>
-          <td>${i+1}</td><td>${esc(x.student_name)}</td><td>${esc(x.mobile||"")}</td>
-          <td>${formatScore(x.score)}</td><td>${x.correct}</td><td>${x.wrong}</td><td>${x.skipped}</td>
-          <td><button class="l" onclick="adminViewResult(${x.id})">देखें</button></td>
-        </tr>`;
-      });
-      html+=`</table></div>`;
+      const group=groups[key],testId=group[0].test_id,examType=group[0].exam_type;
+      html+=`<div class="card"><h3>${esc(EXAM_CONFIGS[examType].title)} — ${esc(testNames[String(testId)]||("Test "+testId))}</h3>
+        <table><tr><th>Rank</th><th>नाम</th><th>अंक</th><th>सही</th><th>गलत</th><th>छोड़े</th><th>Details</th></tr>`;
+      group.forEach((row,index)=>{html+=`<tr><td>${index+1}</td><td>${esc(row.student_name)}</td><td>${formatScore(row.score)}</td><td>${row.correct}</td><td>${row.wrong}</td><td>${row.skipped}</td><td><button class="l" onclick="adminViewResult(${row.id})">देखें</button></td></tr>`;});
+      html+="</table></div>";
     });
-    $("adminBody").innerHTML=html+(sorted.length?"":"<p>अभी कोई Result नहीं है।</p>");
-  }catch(e){
-    console.error(e);
-    const local=readLocalResults().filter(x=>!filterExam||x.exam_type===filterExam)
-      .sort((a,b)=>Number(b.score)-Number(a.score));
-    let html=`<h3>Local Results / Rank</h3><p>ये परिणाम केवल इसी ब्राउज़र में सेव हैं।</p>`+
-      `<div class="sectionBar"><button class="l" onclick="adminResults()">सभी</button><button class="p" onclick="adminResults('AIIMS')">AIIMS</button><button class="g" onclick="adminResults('RML')">RML</button></div>`;
-    html+=local.map((x,i)=>`<div class="card"><b>Rank ${i+1} — ${esc(x.student_name)}</b><br>${esc(EXAM_CONFIGS[x.exam_type]?.title||x.exam_type)}<br>Score ${formatScore(x.score)} • सही ${x.correct} • गलत ${x.wrong} • छोड़े ${x.skipped}</div>`).join("")||"<p>अभी कोई Local Result नहीं है।</p>";
-    $("adminBody").innerHTML=html+`<p class="lockNote">Server error: ${esc(e?.message||e)}</p>`;
+    $("adminBody").innerHTML=html+(sorted.length?"":"<p>अभी कोई Online Result नहीं है।</p>");
+  }catch(error){
+    const local=readLocalResults().filter(row=>!filterExam||row.exam_type===filterExam).sort((a,b)=>Number(b.score)-Number(a.score));
+    $("adminBody").innerHTML="<h3>Local Results / Rank</h3><p>Online Results नहीं खुल सके।</p>"+
+      local.map((row,index)=>`<div class="card"><b>Rank ${index+1} — ${esc(row.student_name)}</b><br>${esc(EXAM_CONFIGS[row.exam_type]?.title||row.exam_type)}<br>Score ${formatScore(row.score)} • सही ${row.correct} • गलत ${row.wrong} • छोड़े ${row.skipped}</div>`).join("")+
+      `<p class="lockNote">Server error: ${esc(error.message||error)}</p>`;
   }
 }
-
 async function adminViewResult(resultId){
   try{
-    const rows=await api("results","GET",null,"?select=id,test_id,exam_type,student_name,mobile,score,correct,wrong,skipped,answers,review,created_at&id=eq."+encodeURIComponent(resultId));
+    const rows=await api("results","GET",null,"?select=id,test_id,exam_type,student_name,score,correct,wrong,skipped,answers,review,created_at&id=eq."+encodeURIComponent(resultId));
     if(!rows[0]) throw Error("Result नहीं मिला");
     const r=rows[0];
     const ts=await api("tests","GET",null,"?select=id,name,questions&id=eq."+encodeURIComponent(r.test_id));
@@ -906,7 +943,7 @@ async function adminViewResult(resultId){
 
     let html=`<button class="l" onclick="adminResults('${esc(r.exam_type||"AIIMS")}')">← वापस</button>
       <h3>${esc(r.exam_type||"AIIMS")} — ${esc(t?.name||("Test "+r.test_id))}</h3>
-      <p><b>नाम:</b> ${esc(r.student_name)}<br><b>Mobile:</b> ${esc(r.mobile||"")}<br><b>Score:</b> ${formatScore(r.score)} • सही ${r.correct} • गलत ${r.wrong} • छोड़े ${r.skipped}</p>`;
+      <p><b>नाम:</b> ${esc(r.student_name)}<br><b>Score:</b> ${formatScore(r.score)} • सही ${r.correct} • गलत ${r.wrong} • छोड़े ${r.skipped}</p>`;
     html+=qs.map((q,k)=>{
       const user=ans[k]; const correct=review[k]?.correctIndex??q.a;
       const cls=user===correct?"right":(user==null?"card":"wrong");
@@ -917,26 +954,20 @@ async function adminViewResult(resultId){
 }
 
 async function adminFeedback(){
-  try{
-    const r=await api("feedback");
-
-    $("adminBody").innerHTML=
-      "<h3>Feedback</h3>"+
-      r.map(x=>`
-        <div class="card">
-          ${esc(x.message)}
-        </div>
-      `).join("");
-
-  }catch(e){
-    console.error(e);
+  if(!adminToken){
     const local=readLocalFeedback();
-    $("adminBody").innerHTML="<h3>Local Feedback</h3>"+
-      (local.map(x=>`<div class="card">${esc(x.message)}</div>`).join("")||"<p>कोई Local Feedback नहीं है।</p>")+
-      `<p class="lockNote">Server error: ${esc(e?.message||e)}</p>`;
+    $("adminBody").innerHTML="<h3>Local Feedback</h3><p>Online Feedback देखने के लिए Supabase Admin Login करें।</p>"+
+      (local.map(row=>`<div class="card">${esc(row.message)}</div>`).join("")||"<p>कोई Local Feedback नहीं है।</p>");
+    return;
+  }
+  try{
+    const rows=await api("feedback","GET",null,"?select=id,test_id,exam_type,message,created_at&order=id.desc");
+    $("adminBody").innerHTML="<h3>Online Feedback</h3>"+
+      (rows.map(row=>`<div class="card"><b>${esc(EXAM_CONFIGS[row.exam_type]?.title||row.exam_type||"")}</b><br>${esc(row.message)}<br><small>${esc(row.created_at||"")}</small></div>`).join("")||"<p>अभी कोई Online Feedback नहीं है।</p>");
+  }catch(error){
+    $("adminBody").innerHTML=`<h3>Feedback</h3><p>Online Feedback नहीं खुला।</p><p class="lockNote">${esc(error.message||error)}</p>`;
   }
 }
-
 function esc(s){
   return String(s??"").replace(
     /[&<>"']/g,
