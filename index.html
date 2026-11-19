@@ -165,19 +165,60 @@ function show(x){
 }
 
 async function api(t,m="GET",b=null,q=""){
+  const url=SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/"+t+q;
   const h={
+    // Supabase publishable keys belong in the apikey header.
+    // Do not send an sb_publishable key as a Bearer JWT.
     "apikey":SUPABASE_ANON_KEY,
-    "Authorization":"Bearer "+SUPABASE_ANON_KEY,
     "Content-Type":"application/json",
     "Prefer":"return=representation"
   };
-  const r=await fetch(SUPABASE_URL+"/rest/v1/"+t+q,{
-    method:m,
-    headers:h,
-    body:b?JSON.stringify(b):null
-  });
-  if(!r.ok)throw Error(await r.text());
-  return r.status===204?null:r.json();
+  let r;
+  try{
+    r=await fetch(url,{
+      method:m,
+      mode:"cors",
+      cache:"no-store",
+      headers:h,
+      body:b!==null?JSON.stringify(b):null
+    });
+  }catch(e){
+    const reason=(e&&e.message)?e.message:"Network/CORS error";
+    throw Error(
+      "Supabase server se connection nahi ho paya ("+reason+").\n\n"+
+      "Check karein: internet chal raha ho; Supabase project active ho; Project URL aur Publishable key sahi hon; browser extension/ad-blocker request block na kar raha ho."
+    );
+  }
+  const raw=await r.text();
+  let data=null;
+  if(raw){
+    try{data=JSON.parse(raw)}catch(_){data=raw}
+  }
+  if(!r.ok){
+    const detail=typeof data==="string"?data:JSON.stringify(data);
+    if(r.status===401||r.status===403){
+      throw Error("Supabase ne request reject ki (HTTP "+r.status+"). API key ya Database RLS/permission check karein.\n"+detail);
+    }
+    if(r.status===404){
+      throw Error("Supabase table/column nahi mila (HTTP 404). Database schema check karein.\n"+detail);
+    }
+    throw Error("Supabase error HTTP "+r.status+": "+detail);
+  }
+  return data;
+}
+
+async function checkDatabaseConnection(){
+  const status=$("dbConnectionStatus");
+  if(status)status.textContent="Database connection check ho raha hai...";
+  try{
+    await api("tests","GET",null,"?select=id&limit=1");
+    if(status)status.textContent="✅ Supabase connection successful. Ab JSON Import karke Save & Publish karein.";
+    alert("Supabase connection sahi hai.");
+  }catch(e){
+    const msg=e&&e.message?e.message:String(e);
+    if(status)status.textContent="❌ "+msg;
+    alert("Database connection check fail hua:\n\n"+msg);
+  }
 }
 
 function chooseExam(type){
@@ -513,6 +554,8 @@ async function adminTests(){
   body.innerHTML=`
     <h3>Tests</h3>
     <button class="p" onclick="newTest()">+ नया Test जोड़ें</button>
+    <button class="l" onclick="checkDatabaseConnection()">🔌 Database Connection Check</button>
+    <p id="dbConnectionStatus">Database connection अभी check नहीं हुआ है।</p>
 
     <div class="importbox">
       <b>AIIMS Hospital Attendant</b><br>
@@ -767,8 +810,8 @@ async function saveBuilder(publish){
     alert(publish?"Test Publish हो गया।":"Test Draft में Save हो गया।");
     adminTests();
   }catch(e){
-    console.error(e);
-    alert("Save नहीं हुआ: "+e.message);
+    console.error("SAVE TEST ERROR:",e);
+    alert("Save नहीं हुआ:\n\n"+(e&&e.message?e.message:String(e)));
   }
 }
 
