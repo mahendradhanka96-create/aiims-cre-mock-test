@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#123b6d">
 <link rel="icon" type="image/png" href="./icon-512.png">
-<title>AIIMS / RML Hospital Attendant Mock Test</title>
+<title>AIIMS / RML Hospital Attendant Mock Test — Trading Chart Edition</title>
 <style>
 body{margin:0;font-family:Arial,sans-serif;background:#eef3f8;color:#172033}
 header{background:#123b6d;color:#fff;padding:14px;display:flex;justify-content:space-between;align-items:center}
@@ -46,6 +46,34 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 .stats{grid-template-columns:repeat(2,1fr)}
 .sectionPill{font-size:12px;padding:7px 8px}
 }
+
+/* Trading-style performance dashboard */
+.tradingWrap{background:#081522;color:#e6edf6;border:1px solid #25364b;border-radius:16px;padding:14px;box-shadow:0 10px 28px #07111f22}
+.tradingHead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.tradingHead .marketTag{font-size:11px;color:#9fb3c8;letter-spacing:.08em;text-transform:uppercase}
+.tradingHead .marketTitle{font-size:18px;font-weight:700;margin-top:3px}
+.tradingHead .periodTag{border:1px solid #334960;background:#102338;color:#c9d8e8;border-radius:6px;padding:5px 9px;font-size:12px}
+.tradingStats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:10px 0 14px}
+.tradingStat{background:#102338;border:1px solid #233b53;border-radius:9px;padding:10px;min-width:0}
+.tradingStat small{display:block;color:#93a9bf;font-size:11px;margin-bottom:5px}
+.tradingStat b{display:block;color:#f3f7fc;font-size:17px;overflow-wrap:anywhere}
+.tradingStat .positive{color:#24d18b}.tradingStat .negative{color:#ff667a}
+.tradingChartBox{background:#0b1928;border:1px solid #203449;border-radius:10px;padding:6px;overflow:hidden}
+.tradingChartBox svg{display:block;width:100%;height:auto;min-width:0}
+.tradingLegend{display:flex;gap:16px;flex-wrap:wrap;color:#a9bbcd;font-size:12px;padding:9px 4px 2px}
+.legendLine{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:6px;background:#21ca89;border-radius:4px}
+.legendBar{display:inline-block;width:9px;height:10px;vertical-align:middle;margin-right:6px;background:#277da8;border-radius:2px}
+.tradingHistory{display:grid;gap:7px;margin-top:12px}
+.tradingHistoryRow{display:grid;grid-template-columns:52px 1.2fr .8fr .9fr 1fr;gap:8px;align-items:center;background:#102338;border:1px solid #233b53;padding:9px;border-radius:8px;font-size:12px;color:#d8e4f0}
+.tradingHistoryRow small{color:#91a7bc}.tradingHistoryRow .up{color:#24d18b;font-weight:700}.tradingHistoryRow .down{color:#ff667a;font-weight:700}
+.tradingFoot{color:#8fa6bc;font-size:11px;margin-top:10px;line-height:1.5}
+@media(max-width:600px){
+ .tradingStats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .tradingStat b{font-size:15px}
+ .tradingHistoryRow{grid-template-columns:42px 1fr 1fr;}
+ .tradingHistoryRow .histTime,.tradingHistoryRow .histRank{display:none}
+}
+
 </style>
 </head>
 <body>
@@ -607,30 +635,79 @@ function localRankForAttempt(rows,record){
 function renderPerformanceChart(allRows,currentRecord){
   const sameStudent=allRows.filter(row=>row.exam_type===currentRecord.exam_type&&
     String(row.student_name||"").trim().toLowerCase()===String(currentRecord.student_name||"").trim().toLowerCase());
-  const rows=sameStudent.sort((a,b)=>new Date(a.completed_at)-new Date(b.completed_at)).slice(-10);
+  const rows=sameStudent.sort((a,b)=>new Date(a.completed_at)-new Date(b.completed_at)).slice(-12);
   if(!rows.length){$("performanceChart").innerHTML="<p>अभी Chart के लिए कोई रिकॉर्ड नहीं है।</p>";return;}
-  const W=760,H=280,L=54,R=18,T=22,B=48,plotW=W-L-R,plotH=H-T-B;
-  const xAt=i=>rows.length===1?L+plotW/2:L+(plotW*i/(rows.length-1));
+
+  const W=900,H=430,L=66,R=24,T=34,plotBottom=286,volumeTop=326,volumeBottom=386;
+  const plotW=W-L-R,plotH=plotBottom-T;
   const pct=row=>Math.max(0,Math.min(100,(Number(row.score)||0)/(Number(row.total_marks)||100)*100));
+  const xAt=i=>rows.length===1?L+plotW/2:L+(plotW*i/(rows.length-1));
   const yAt=row=>T+(100-pct(row))*plotH/100;
-  const pts=rows.map((row,i)=>({x:xAt(i),y:yAt(row),row,pct:pct(row)}));
-  const line=pts.map((p,i)=>(i?"L":"M")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
-  const area=line+` L ${pts[pts.length-1].x.toFixed(1)},${(T+plotH).toFixed(1)} L ${pts[0].x.toFixed(1)},${(T+plotH).toFixed(1)} Z`;
+  const pts=rows.map((row,i)=>({x:xAt(i),y:yAt(row),row,pct:pct(row),volume:Math.max(0,Math.min(100,(Number(row.correct)||0)+(Number(row.wrong)||0)))}));
   const grid=[0,25,50,75,100].map(v=>{
     const y=T+(100-v)*plotH/100;
-    return `<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#293b52" stroke-width="1"/><text x="${L-10}" y="${y+4}" text-anchor="end" font-size="11" fill="#9eb0c6">${v}%</text>`;
+    return `<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#263b50" stroke-width="1" stroke-dasharray="3 5"/><text x="${L-12}" y="${y+4}" text-anchor="end" font-size="12" fill="#8fa6bc">${v}%</text>`;
   }).join("");
-  const labels=pts.map((p,i)=>`<text x="${p.x}" y="${H-23}" text-anchor="middle" font-size="11" fill="#9eb0c6">T${i+1}</text>`).join("");
+  const verticals=pts.map(p=>`<line x1="${p.x}" y1="${T}" x2="${p.x}" y2="${volumeBottom}" stroke="#1c3044" stroke-width="1" stroke-dasharray="2 7"/>`).join("");
+  const linePath=pts.map((p,i)=>(i?"L":"M")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+  const areaPath=linePath+` L ${pts[pts.length-1].x.toFixed(1)},${plotBottom} L ${pts[0].x.toFixed(1)},${plotBottom} Z`;
+  const area=`<path d="${areaPath}" fill="url(#tradingScoreFill)"/>`;
+  const segments=pts.slice(1).map((p,i)=>{
+    const prev=pts[i];
+    const color=p.pct>=prev.pct?"#20cf91":"#ff6478";
+    return `<line x1="${prev.x}" y1="${prev.y}" x2="${p.x}" y2="${p.y}" stroke="${color}" stroke-width="3.5" stroke-linecap="round"/>`;
+  }).join("");
   const dots=pts.map((p,i)=>{
+    const color=i===0?"#56b9ff":(p.pct>=pts[i-1].pct?"#20cf91":"#ff6478");
     const rankText=p.row.rank?`Rank ${p.row.rank}/${p.row.rank_total||"?"}`:"Rank उपलब्ध नहीं";
-    const title=`${p.row.test_name||"Test"} | ${formatScore(p.row.score)}/${p.row.total_marks} अंक | ${rankText} | समय ${formatElapsed(p.row.time_taken_seconds)} | ${displayDateTime(p.row.completed_at)}`;
-    return `<g><circle cx="${p.x}" cy="${p.y}" r="7" fill="#23c983" stroke="#e8fff4" stroke-width="2"><title>${esc(title)}</title></circle><text x="${p.x}" y="${Math.max(13,p.y-13)}" text-anchor="middle" font-size="11" font-weight="bold" fill="#eaf1fb">${formatScore(p.row.score)}</text></g>`;
+    const title=`${p.row.test_name||"Test"} | ${formatScore(p.row.score)}/${p.row.total_marks} अंक (${p.pct.toFixed(1)}%) | ${rankText} | समय ${formatElapsed(p.row.time_taken_seconds)} | ${displayDateTime(p.row.completed_at)}`;
+    const label=rows.length<=8?`<text x="${p.x}" y="${Math.max(15,p.y-14)}" text-anchor="middle" font-size="12" font-weight="700" fill="#e8f1fb">${p.pct.toFixed(0)}%</text>`:"";
+    return `<g><circle cx="${p.x}" cy="${p.y}" r="11" fill="${color}" opacity=".16"/><circle cx="${p.x}" cy="${p.y}" r="5.5" fill="${color}" stroke="#eaf4ff" stroke-width="1.5"><title>${esc(title)}</title></circle>${label}</g>`;
   }).join("");
-  const currentRank=currentRecord.rank?` • Rank ${currentRecord.rank}/${currentRecord.rank_total||"?"}`:"";
-  const attemptBadges=pts.map((p,i)=>`<span class="chartRank">T${i+1}: ${formatScore(p.row.score)}/${p.row.total_marks} • ${p.row.rank?`Rank ${p.row.rank}/${p.row.rank_total||"?"}`:"Local Rank"}</span>`).join("");
-  $("performanceChart").innerHTML=`<div class="chartPanel"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="टेस्ट स्कोर का परफॉर्मेंस चार्ट"><defs><linearGradient id="scoreAreaGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#23c983" stop-opacity=".32"/><stop offset="100%" stop-color="#23c983" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#scoreAreaGradient)"/><path d="${line}" fill="none" stroke="#23c983" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}${labels}<text x="${W-R}" y="${H-4}" text-anchor="end" font-size="10" fill="#9eb0c6">पुराने टेस्ट  ←  टेस्ट क्रम  →  नया टेस्ट</text></svg><div class="chartCaption"><span><i class="chartDot"></i>अंक का प्रतिशत</span><span>दिखाए गए टेस्ट: ${rows.length}</span><span>हर बिंदु पर अंक, Rank और समय उपलब्ध है</span></div><div>${attemptBadges}</div></div><p><b>वर्तमान प्रदर्शन:</b> ${formatScore(currentRecord.score)}/${currentRecord.total_marks} अंक (${pct(currentRecord).toFixed(1)}%)${currentRank} • समय ${formatElapsed(currentRecord.time_taken_seconds)}</p>`;
-}
+  const volMax=Math.max(10,...pts.map(p=>p.volume));
+  const volBars=pts.map((p,i)=>{
+    const barH=Math.max(3,(p.volume/100)*(volumeBottom-volumeTop));
+    const bw=Math.min(34,Math.max(12,plotW/Math.max(rows.length*2,3)));
+    const color=i===0?"#277da8":(p.pct>=pts[i-1].pct?"#168b70":"#9c4d5e");
+    const title=`T${i+1}: ${p.volume} प्रश्न हल किए (${p.row.correct||0} सही, ${p.row.wrong||0} गलत)`;
+    return `<rect x="${p.x-bw/2}" y="${volumeBottom-barH}" width="${bw}" height="${barH}" rx="3" fill="${color}" opacity=".9"><title>${esc(title)}</title></rect>`;
+  }).join("");
+  const xLabels=pts.map((p,i)=>`<text x="${p.x}" y="${plotBottom+20}" text-anchor="middle" font-size="11" fill="#9bb0c4">T${i+1}</text>`).join("");
+  const latest=rows[rows.length-1];
+  const lastPct=pct(latest);
+  const prevPct=rows.length>1?pct(rows[rows.length-2]):null;
+  const change=prevPct===null?null:lastPct-prevPct;
+  const changeText=change===null?"पहला टेस्ट":`${change>=0?"+":""}${change.toFixed(1)} प्रतिशत अंक`;
+  const changeClass=change===null?"":(change>=0?"positive":"negative");
+  const latestRank=latest.rank?`${latest.rank}/${latest.rank_total||"?"}`:"उपलब्ध नहीं";
+  const hist=pts.map((p,i)=>{
+    const diff=i===0?null:p.pct-pts[i-1].pct;
+    const diffTxt=diff===null?"पहला रिकॉर्ड":`${diff>=0?"▲ +":"▼ "}${diff.toFixed(1)}%`;
+    const diffClass=diff===null?"":(diff>=0?"up":"down");
+    const rank=p.row.rank?`${p.row.rank}/${p.row.rank_total||"?"}`:"—";
+    return `<div class="tradingHistoryRow"><b>T${i+1}</b><span>${formatScore(p.row.score)}/${p.row.total_marks}<br><small>${p.pct.toFixed(1)}% स्कोर</small></span><span class="${diffClass}">${diffTxt}</span><span class="histRank">Rank ${rank}</span><span class="histTime">${formatElapsed(p.row.time_taken_seconds)}</span></div>`;
+  }).reverse().join("");
 
+  $("performanceChart").innerHTML=`<div class="tradingWrap">
+    <div class="tradingHead"><div><div class="marketTag">PERFORMANCE / ${esc(currentRecord.exam_type||"EXAM")} / SCORE TREND</div><div class="marketTitle">आपकी टेस्ट परफॉर्मेंस</div></div><span class="periodTag">LAST ${rows.length} TEST${rows.length===1?"":"S"}</span></div>
+    <div class="tradingStats">
+      <div class="tradingStat"><small>अंतिम स्कोर</small><b>${formatScore(latest.score)} / ${latest.total_marks}</b></div>
+      <div class="tradingStat"><small>स्कोर प्रतिशत</small><b>${lastPct.toFixed(1)}%</b></div>
+      <div class="tradingStat"><small>पिछले टेस्ट से बदलाव</small><b class="${changeClass}">${changeText}</b></div>
+      <div class="tradingStat"><small>रैंक / लगा समय</small><b>${latestRank}</b><small>${formatElapsed(latest.time_taken_seconds)}</small></div>
+    </div>
+    <div class="tradingChartBox"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="टेस्ट स्कोर का Trading style performance chart">
+      <defs><linearGradient id="tradingScoreFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#20cf91" stop-opacity=".24"/><stop offset="100%" stop-color="#20cf91" stop-opacity="0"/></linearGradient></defs>
+      ${grid}${verticals}<text x="${L}" y="18" font-size="11" fill="#92a9bf">SCORE %</text>${area}${segments}${dots}
+      <line x1="${L}" y1="${plotBottom}" x2="${W-R}" y2="${plotBottom}" stroke="#334b62"/>${xLabels}
+      <text x="${L}" y="${volumeTop-9}" font-size="11" fill="#92a9bf">VOLUME • ATTEMPTED QUESTIONS</text>
+      <line x1="${L}" y1="${volumeBottom}" x2="${W-R}" y2="${volumeBottom}" stroke="#334b62"/>${volBars}
+      <text x="${W-R}" y="${H-10}" text-anchor="end" font-size="10" fill="#8fa6bc">पुराना टेस्ट  ←  टेस्ट क्रम  →  नया टेस्ट</text>
+    </svg><div class="tradingLegend"><span><i class="legendLine"></i>स्कोर ट्रेंड • हरा = सुधार • लाल = गिरावट</span><span><i class="legendBar"></i>वॉल्यूम = हल किए गए प्रश्न</span></div></div>
+    <div class="tradingHistory"><b style="font-size:13px;color:#e5edf6">टेस्ट हिस्ट्री</b>${hist}</div>
+    <div class="tradingFoot">यह चार्ट आपके इसी नाम और इसी Exam के पिछले ${rows.length} टेस्ट दिखाता है। नया टेस्ट देने पर नया पॉइंट और वॉल्यूम बार जुड़ेगा। एक टेस्ट होने पर एक पॉइंट दिखेगा; ट्रेंड लाइन कई टेस्ट के बाद बनेगी।</div>
+  </div>`;
+}
 async function submitTest(auto=false){
   if(submitted)return;
   if(sectionIndex!==examConfig.sections-1)return alert("आखिरी Section पूरा होने के बाद ही Test Submit होगा।");
