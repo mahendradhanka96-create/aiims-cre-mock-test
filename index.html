@@ -34,6 +34,8 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 .sectionPill.active{outline:3px solid #1769aa;font-weight:bold}
 .sectionPill.done{background:#b7e6c5}
 .lockNote{background:#fff8e1;padding:10px;border-radius:8px;margin:8px 0}
+.takenCard{border:2px solid #159447}
+.takenTag{display:inline-block;background:#e8f7ed;color:#176b38;padding:6px 10px;border-radius:8px;font-weight:bold;margin:8px 0}
 @media(max-width:600px){
 .grid{grid-template-columns:repeat(5,1fr)}
 .stats{grid-template-columns:repeat(2,1fr)}
@@ -103,6 +105,7 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
       <div class="stat"><b id="skipped"></b><br>छोड़े</div>
     </div>
     <h3 id="rank"></h3>
+    <button class="p" onclick="returnToTestList()">← टेस्ट सूची में वापस जाएँ</button>
   </div>
 
   <div class="card">
@@ -155,6 +158,7 @@ const TOTAL_QUESTIONS=100;
 const LOCAL_TESTS_KEY="aiims_rml_local_tests_v1";
 const LOCAL_RESULTS_KEY="aiims_rml_local_results_v1";
 const LOCAL_FEEDBACK_KEY="aiims_rml_local_feedback_v1";
+const LOCAL_TAKEN_TESTS_KEY="aiims_rml_taken_tests_v1";
 
 let tests=[],test=null,idx=0,answers=[],lastResultId=null;
 let adminToken=null,adminEmail="";
@@ -287,6 +291,34 @@ function readLocalFeedback(){
 function writeLocalFeedback(list){
   localStorage.setItem(LOCAL_FEEDBACK_KEY,JSON.stringify(list));
 }
+function readTakenTests(){
+  try{
+    const value=JSON.parse(localStorage.getItem(LOCAL_TAKEN_TESTS_KEY)||"[]");
+    return Array.isArray(value)?value:[];
+  }catch(error){return []}
+}
+function takenTestKey(item){
+  return String(item?.exam_type||selectedExam)+"::"+String(item?.id??"");
+}
+function getTakenTest(item){
+  const key=takenTestKey(item);
+  return readTakenTests().find(row=>row.key===key)||null;
+}
+function markTestTaken(item,details){
+  const records=readTakenTests();
+  const key=takenTestKey(item);
+  const record={
+    key,exam_type:item.exam_type||selectedExam,test_id:String(item.id),
+    test_name:String(item.name||"Test"),completed_at:new Date().toISOString(),
+    score:details.score,correct:details.correct,wrong:details.wrong,skipped:details.skipped
+  };
+  const index=records.findIndex(row=>row.key===key);
+  if(index>=0)records[index]=record;else records.push(record);
+  localStorage.setItem(LOCAL_TAKEN_TESTS_KEY,JSON.stringify(records));
+}
+function displayDateTime(value){
+  try{return new Date(value).toLocaleString("hi-IN");}catch(error){return ""}
+}
 function isLocalId(id){return String(id).startsWith("LOCAL-")}
 
 async function checkDatabaseConnection(){
@@ -324,19 +356,26 @@ async function loadStudentTests(){
   const localNote=serverMessage
     ? `<p class="lockNote">⚠️ Online server उपलब्ध नहीं है। Local Save किए गए टेस्ट नीचे दिखाए जा रहे हैं।</p>`
     : "";
-  $("tests").innerHTML=localNote+(tests.map(t=>`
-    <div class="card">
+  $("tests").innerHTML=localNote+(tests.map(t=>{
+    const taken=getTakenTest(t);
+    return `
+    <div class="card ${taken?"takenCard":""}">
       <b>${esc(t.name)}</b>${t.localOnly?` <span class="sectionPill">इस डिवाइस पर सेव</span>`:""}<br>
+      ${taken?`<div class="takenTag">✅ यह टेस्ट आप पहले दे चुके हैं</div><br><small>आखिरी बार दिया: ${esc(displayDateTime(taken.completed_at))}</small><br>`:""}
       ${Array.isArray(t.questions)?t.questions.length:0} प्रश्न<br>
       ${examConfig.pattern}<br>कुल ${examConfig.totalMarks} अंक<br><br>
-      <button class="p" onclick="start('${String(t.id).replace(/'/g,"\\'")}')">▶️ Test शुरू करें</button>
-    </div>`).join("")) || localNote+"<p>इस Exam का कोई Published Test नहीं है। Owner/Admin में JSON Import करके Save & Publish करें।</p>";
+      <button class="p" onclick="start('${String(t.id).replace(/'/g,"\\'") }')">${taken?"🔁 फिर से Test दें":"▶️ Test शुरू करें"}</button>
+    </div>`;
+  }).join("")) || localNote+"<p>इस Exam का कोई Published Test नहीं है। Owner/Admin में JSON Import करके Save & Publish करें।</p>";
 }
 async function student(){
   show("student");
   $("studentExamTitle").textContent=examConfig.title+" — विद्यार्थी की जानकारी";
   if($("totalMarksLabel")) $("totalMarksLabel").textContent=examConfig.totalMarks;
   await loadStudentTests();
+}
+async function returnToTestList(){
+  await student();
 }
 
 function start(id){
@@ -545,6 +584,11 @@ async function submitTest(auto=false){
       alert("Result save नहीं हो पाया। Server error: "+(serverError?.message||serverError)+"\nLocal storage error: "+(storageError.message||storageError));
       return;
     }
+  }
+  try{
+    markTestTaken(test,{score,correct:correctCount,wrong:wrongCount,skipped:skippedCount});
+  }catch(takenError){
+    console.warn("Test completion mark could not be saved:",takenError);
   }
   show("result");
   if($("totalMarksLabel"))$("totalMarksLabel").textContent=examConfig.totalMarks;
