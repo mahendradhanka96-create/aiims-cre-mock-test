@@ -20,7 +20,7 @@ input,textarea,select{padding:10px;width:100%;box-sizing:border-box;margin:5px 0
 .opts .sel{border-color:#1769aa;background:#e5f2ff}
 .grid{display:grid;grid-template-columns:repeat(10,1fr);gap:5px}
 .qn{background:#e8edf2}.done{background:#b7e6c5}.cur{outline:3px solid #1769aa}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .stat{text-align:center;background:#f3f6f9;padding:12px;border-radius:8px}
 .right{background:#e8f7ed;padding:10px;border-radius:8px;margin:8px 0}
 .wrong{background:#fff0f0;padding:10px;border-radius:8px;margin:8px 0}
@@ -36,6 +36,11 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 .lockNote{background:#fff8e1;padding:10px;border-radius:8px;margin:8px 0}
 .takenCard{border:2px solid #159447}
 .takenTag{display:inline-block;background:#e8f7ed;color:#176b38;padding:6px 10px;border-radius:8px;font-weight:bold;margin:8px 0}
+.chartPanel{background:#101c2d;border-radius:14px;padding:12px;color:#eaf1fb;overflow:hidden}
+.chartPanel svg{display:block;width:100%;height:auto;overflow:visible}
+.chartCaption{display:flex;gap:12px;flex-wrap:wrap;color:#b9c8da;font-size:13px;margin-top:6px}
+.chartDot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#23c983;margin-right:5px}
+.chartRank{display:inline-block;background:#203750;border:1px solid #3c5878;border-radius:7px;padding:3px 7px;margin:3px;font-size:12px;color:#dbeafe}
 @media(max-width:600px){
 .grid{grid-template-columns:repeat(5,1fr)}
 .stats{grid-template-columns:repeat(2,1fr)}
@@ -103,9 +108,17 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
       <div class="stat"><b id="correct"></b><br>सही</div>
       <div class="stat"><b id="wrong"></b><br>गलत</div>
       <div class="stat"><b id="skipped"></b><br>छोड़े</div>
+      <div class="stat"><b id="timeTaken">—</b><br>टेस्ट में लगा समय</div>
+      <div class="stat"><b id="scorePercent">—</b><br>प्राप्त प्रतिशत</div>
     </div>
     <h3 id="rank"></h3>
     <button class="p" onclick="returnToTestList()">← टेस्ट सूची में वापस जाएँ</button>
+  </div>
+
+  <div class="card">
+    <h3>📈 Performance Chart — Trading जैसा Score Graph</h3>
+    <p>हर बिंदु आपका एक पूरा किया हुआ टेस्ट दिखाता है। बिंदु पर माउस रखें या मोबाइल पर टैप करें, अंक, Rank और समय देखें।</p>
+    <div id="performanceChart"></div>
   </div>
 
   <div class="card">
@@ -159,10 +172,12 @@ const LOCAL_TESTS_KEY="aiims_rml_local_tests_v1";
 const LOCAL_RESULTS_KEY="aiims_rml_local_results_v1";
 const LOCAL_FEEDBACK_KEY="aiims_rml_local_feedback_v1";
 const LOCAL_TAKEN_TESTS_KEY="aiims_rml_taken_tests_v1";
+const LOCAL_PERFORMANCE_KEY="aiims_rml_performance_history_v1";
 
 let tests=[],test=null,idx=0,answers=[],lastResultId=null;
 let adminToken=null,adminEmail="";
 let sectionIndex=0,sectionEnd=0,sectionTimerRunning=false,submitted=false;
+let testStartedAt=0;
 
 const $=x=>document.getElementById(x);
 
@@ -309,8 +324,9 @@ function markTestTaken(item,details){
   const key=takenTestKey(item);
   const record={
     key,exam_type:item.exam_type||selectedExam,test_id:String(item.id),
-    test_name:String(item.name||"Test"),completed_at:new Date().toISOString(),
-    score:details.score,correct:details.correct,wrong:details.wrong,skipped:details.skipped
+    test_name:String(item.name||"Test"),completed_at:details.completed_at||new Date().toISOString(),
+    score:details.score,correct:details.correct,wrong:details.wrong,skipped:details.skipped,
+    time_taken_seconds:details.time_taken_seconds,rank:details.rank,rank_total:details.rank_total,rank_source:details.rank_source
   };
   const index=records.findIndex(row=>row.key===key);
   if(index>=0)records[index]=record;else records.push(record);
@@ -318,6 +334,26 @@ function markTestTaken(item,details){
 }
 function displayDateTime(value){
   try{return new Date(value).toLocaleString("hi-IN");}catch(error){return ""}
+}
+function formatElapsed(seconds){
+  const total=Math.max(0,Math.floor(Number(seconds)||0));
+  const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),sec=total%60;
+  if(h>0)return `${h} घंटे ${m} मिनट ${sec} सेकंड`;
+  if(m>0)return `${m} मिनट ${sec} सेकंड`;
+  return `${sec} सेकंड`;
+}
+function readPerformanceHistory(){
+  try{
+    const rows=JSON.parse(localStorage.getItem(LOCAL_PERFORMANCE_KEY)||"[]");
+    return Array.isArray(rows)?rows:[];
+  }catch(error){return []}
+}
+function savePerformanceRecord(record){
+  const rows=readPerformanceHistory();
+  rows.push(record);
+  // Keep a practical browser-side history size while preserving recent attempts.
+  localStorage.setItem(LOCAL_PERFORMANCE_KEY,JSON.stringify(rows.slice(-300)));
+  return rows.slice(-300);
 }
 function isLocalId(id){return String(id).startsWith("LOCAL-")}
 
@@ -361,7 +397,7 @@ async function loadStudentTests(){
     return `
     <div class="card ${taken?"takenCard":""}">
       <b>${esc(t.name)}</b>${t.localOnly?` <span class="sectionPill">इस डिवाइस पर सेव</span>`:""}<br>
-      ${taken?`<div class="takenTag">✅ यह टेस्ट आप पहले दे चुके हैं</div><br><small>आखिरी बार दिया: ${esc(displayDateTime(taken.completed_at))}</small><br>`:""}
+      ${taken?`<div class="takenTag">✅ यह टेस्ट आप पहले दे चुके हैं</div><br><small>आखिरी बार दिया: ${esc(displayDateTime(taken.completed_at))}</small><br><small>अंक: ${esc(formatScore(taken.score))}/${examConfig.totalMarks}${taken.time_taken_seconds!=null?` • समय: ${esc(formatElapsed(taken.time_taken_seconds))}`:""}${taken.rank?` • ${taken.rank_source==="online"?"Online":"Local"} Rank: ${taken.rank}/${taken.rank_total||"?"}`:""}</small><br>`:""}
       ${Array.isArray(t.questions)?t.questions.length:0} प्रश्न<br>
       ${examConfig.pattern}<br>कुल ${examConfig.totalMarks} अंक<br><br>
       <button class="p" onclick="start('${String(t.id).replace(/'/g,"\\'") }')">${taken?"🔁 फिर से Test दें":"▶️ Test शुरू करें"}</button>
@@ -395,6 +431,7 @@ function start(id){
   answers=Array(TOTAL_QUESTIONS).fill(null);
   sectionIndex=0;
   submitted=false;
+  testStartedAt=Date.now();
   lastResultId=null;
   startSectionTimer();
   show("exam");
@@ -542,11 +579,65 @@ function formatScore(v){
   return Number.isInteger(n)?String(n):n.toFixed(2);
 }
 
+async function fetchOnlineRank(testId,examType,score){
+  const url=SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/rpc/get_test_rank";
+  let response;
+  try{
+    response=await fetch(url,{
+      method:"POST",mode:"cors",credentials:"omit",cache:"no-store",
+      headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json","Accept":"application/json"},
+      body:JSON.stringify({p_test_id:Number(testId),p_exam_type:String(examType),p_score:Number(score)})
+    });
+  }catch(error){throw Error(makeConnectionHint(error,url));}
+  const raw=await response.text();
+  let data=null;try{data=raw?JSON.parse(raw):null}catch(_){data=null}
+  if(!response.ok)throw Error("Rank API HTTP "+response.status+": "+(data?.message||raw||"Unknown error"));
+  const row=Array.isArray(data)?data[0]:data;
+  if(!row||!Number.isFinite(Number(row.rank_no))||!Number.isFinite(Number(row.participants)))
+    throw Error("Rank API से सही जानकारी नहीं मिली।");
+  return {rank:Number(row.rank_no),participants:Number(row.participants),source:"online"};
+}
+
+function localRankForAttempt(rows,record){
+  const same=rows.filter(row=>String(row.test_id)===String(record.test_id)&&row.exam_type===record.exam_type);
+  const higher=same.filter(row=>Number(row.score)>Number(record.score)).length;
+  return {rank:higher+1,participants:same.length,source:"local"};
+}
+
+function renderPerformanceChart(allRows,currentRecord){
+  const sameStudent=allRows.filter(row=>row.exam_type===currentRecord.exam_type&&
+    String(row.student_name||"").trim().toLowerCase()===String(currentRecord.student_name||"").trim().toLowerCase());
+  const rows=sameStudent.sort((a,b)=>new Date(a.completed_at)-new Date(b.completed_at)).slice(-10);
+  if(!rows.length){$("performanceChart").innerHTML="<p>अभी Chart के लिए कोई रिकॉर्ड नहीं है।</p>";return;}
+  const W=760,H=280,L=54,R=18,T=22,B=48,plotW=W-L-R,plotH=H-T-B;
+  const xAt=i=>rows.length===1?L+plotW/2:L+(plotW*i/(rows.length-1));
+  const pct=row=>Math.max(0,Math.min(100,(Number(row.score)||0)/(Number(row.total_marks)||100)*100));
+  const yAt=row=>T+(100-pct(row))*plotH/100;
+  const pts=rows.map((row,i)=>({x:xAt(i),y:yAt(row),row,pct:pct(row)}));
+  const line=pts.map((p,i)=>(i?"L":"M")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+  const area=line+` L ${pts[pts.length-1].x.toFixed(1)},${(T+plotH).toFixed(1)} L ${pts[0].x.toFixed(1)},${(T+plotH).toFixed(1)} Z`;
+  const grid=[0,25,50,75,100].map(v=>{
+    const y=T+(100-v)*plotH/100;
+    return `<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#293b52" stroke-width="1"/><text x="${L-10}" y="${y+4}" text-anchor="end" font-size="11" fill="#9eb0c6">${v}%</text>`;
+  }).join("");
+  const labels=pts.map((p,i)=>`<text x="${p.x}" y="${H-23}" text-anchor="middle" font-size="11" fill="#9eb0c6">T${i+1}</text>`).join("");
+  const dots=pts.map((p,i)=>{
+    const rankText=p.row.rank?`Rank ${p.row.rank}/${p.row.rank_total||"?"}`:"Rank उपलब्ध नहीं";
+    const title=`${p.row.test_name||"Test"} | ${formatScore(p.row.score)}/${p.row.total_marks} अंक | ${rankText} | समय ${formatElapsed(p.row.time_taken_seconds)} | ${displayDateTime(p.row.completed_at)}`;
+    return `<g><circle cx="${p.x}" cy="${p.y}" r="7" fill="#23c983" stroke="#e8fff4" stroke-width="2"><title>${esc(title)}</title></circle><text x="${p.x}" y="${Math.max(13,p.y-13)}" text-anchor="middle" font-size="11" font-weight="bold" fill="#eaf1fb">${formatScore(p.row.score)}</text></g>`;
+  }).join("");
+  const currentRank=currentRecord.rank?` • Rank ${currentRecord.rank}/${currentRecord.rank_total||"?"}`:"";
+  const attemptBadges=pts.map((p,i)=>`<span class="chartRank">T${i+1}: ${formatScore(p.row.score)}/${p.row.total_marks} • ${p.row.rank?`Rank ${p.row.rank}/${p.row.rank_total||"?"}`:"Local Rank"}</span>`).join("");
+  $("performanceChart").innerHTML=`<div class="chartPanel"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="टेस्ट स्कोर का परफॉर्मेंस चार्ट"><defs><linearGradient id="scoreAreaGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#23c983" stop-opacity=".32"/><stop offset="100%" stop-color="#23c983" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#scoreAreaGradient)"/><path d="${line}" fill="none" stroke="#23c983" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}${labels}<text x="${W-R}" y="${H-4}" text-anchor="end" font-size="10" fill="#9eb0c6">पुराने टेस्ट  ←  टेस्ट क्रम  →  नया टेस्ट</text></svg><div class="chartCaption"><span><i class="chartDot"></i>अंक का प्रतिशत</span><span>दिखाए गए टेस्ट: ${rows.length}</span><span>हर बिंदु पर अंक, Rank और समय उपलब्ध है</span></div><div>${attemptBadges}</div></div><p><b>वर्तमान प्रदर्शन:</b> ${formatScore(currentRecord.score)}/${currentRecord.total_marks} अंक (${pct(currentRecord).toFixed(1)}%)${currentRank} • समय ${formatElapsed(currentRecord.time_taken_seconds)}</p>`;
+}
+
 async function submitTest(auto=false){
   if(submitted)return;
   if(sectionIndex!==examConfig.sections-1)return alert("आखिरी Section पूरा होने के बाद ही Test Submit होगा।");
   if(!auto&&!confirm("क्या पूरा Test Submit करना है?"))return;
   submitted=true;sectionTimerRunning=false;
+  const timeTakenSeconds=Math.max(0,Math.round((Date.now()-(testStartedAt||Date.now()))/1000));
+  const completedAt=new Date().toISOString();
   let correctCount=0,wrongCount=0,skippedCount=0;
   answers.forEach((value,index)=>{
     if(value===null)skippedCount++;
@@ -555,17 +646,21 @@ async function submitTest(auto=false){
   });
   const score=Number((correctCount*examConfig.correctMarks+wrongCount*examConfig.wrongMarks).toFixed(2));
   const reviewData=test.questions.map((q,index)=>({user:answers[index],correctIndex:q.a,correct:answers[index]===q.a}));
+  // Metadata is stored as an extra trailing review item so the existing database schema remains compatible.
+  reviewData.push({_meta:{time_taken_seconds:timeTakenSeconds,completed_at:completedAt}});
   const studentName=($("firstName").value.trim()+" "+$("lastName").value.trim()).trim();
   const payload={
     test_id:Number(test.id),exam_type:selectedExam,student_name:studentName,
     score,correct:correctCount,wrong:wrongCount,skipped:skippedCount,
     answers:answers,review:reviewData
   };
-  let serverSaved=false,localSaved=false,serverError=null,rank=0;
+  let serverSaved=false,localSaved=false,serverError=null,rankInfo=null;
   if(!test.localOnly){
     try{
       await api("results","POST",payload);
       serverSaved=true;
+      try{rankInfo=await fetchOnlineRank(test.id,selectedExam,score);}
+      catch(rankError){console.warn("Online rank not available:",rankError);}
     }catch(error){serverError=error;}
   }else{
     serverError=Error("यह टेस्ट केवल इस डिवाइस में सेव है।");
@@ -574,31 +669,53 @@ async function submitTest(auto=false){
     try{
       const local=readLocalResults();
       const localId="LOCAL-RESULT-"+Date.now()+"-"+Math.floor(Math.random()*10000);
-      local.push({...payload,test_id:test.id,id:localId,localOnly:true,created_at:new Date().toISOString()});
+      local.push({...payload,test_id:test.id,id:localId,localOnly:true,created_at:completedAt});
       writeLocalResults(local);lastResultId=localId;localSaved=true;
-      const same=local.filter(row=>String(row.test_id)===String(test.id)&&row.exam_type===selectedExam)
-        .sort((a,b)=>Number(b.score)-Number(a.score));
-      rank=same.findIndex(row=>row.id===localId)+1;
     }catch(storageError){
       submitted=false;
       alert("Result save नहीं हो पाया। Server error: "+(serverError?.message||serverError)+"\nLocal storage error: "+(storageError.message||storageError));
       return;
     }
   }
-  try{
-    markTestTaken(test,{score,correct:correctCount,wrong:wrongCount,skipped:skippedCount});
-  }catch(takenError){
-    console.warn("Test completion mark could not be saved:",takenError);
+  const attemptRecord={
+    attempt_id:"ATTEMPT-"+Date.now()+"-"+Math.floor(Math.random()*10000),
+    test_id:String(test.id),test_name:String(test.name||"Test"),exam_type:selectedExam,
+    student_name:studentName,score,total_marks:examConfig.totalMarks,
+    correct:correctCount,wrong:wrongCount,skipped:skippedCount,
+    time_taken_seconds:timeTakenSeconds,completed_at:completedAt,
+    rank:rankInfo?.rank||null,rank_total:rankInfo?.participants||null,
+    rank_source:rankInfo?.source||null,online:serverSaved
+  };
+  let performanceRows=[];
+  try{performanceRows=savePerformanceRecord(attemptRecord);}
+  catch(storageError){console.warn("Performance history could not be saved:",storageError);performanceRows=[attemptRecord];}
+  if(!rankInfo){
+    rankInfo=localRankForAttempt(performanceRows,attemptRecord);
+    attemptRecord.rank=rankInfo.rank;attemptRecord.rank_total=rankInfo.participants;attemptRecord.rank_source="local";
+    // Update the just-added row with local rank metadata.
+    try{
+      const current=readPerformanceHistory();
+      const at=current.findIndex(row=>row.attempt_id===attemptRecord.attempt_id);
+      if(at>=0){current[at]={...current[at],rank:rankInfo.rank,rank_total:rankInfo.participants,rank_source:"local"};localStorage.setItem(LOCAL_PERFORMANCE_KEY,JSON.stringify(current));}
+      performanceRows=current;
+    }catch(_){ }
   }
+  try{
+    markTestTaken(test,{score,correct:correctCount,wrong:wrongCount,skipped:skippedCount,
+      completed_at:completedAt,time_taken_seconds:timeTakenSeconds,rank:rankInfo.rank,rank_total:rankInfo.participants,rank_source:rankInfo.source});
+  }catch(takenError){console.warn("Test completion mark could not be saved:",takenError);}
   show("result");
   if($("totalMarksLabel"))$("totalMarksLabel").textContent=examConfig.totalMarks;
   $("score").textContent=formatScore(score);
   $("correct").textContent=correctCount;$("wrong").textContent=wrongCount;$("skipped").textContent=skippedCount;
-  $("rank").textContent=serverSaved
-    ? "✅ Result Online Server पर जमा हो गया। पूरी Rank Owner/Admin के Results में दिखाई देगी।"
-    : "इस डिवाइस की Local Rank: "+rank;
+  $("timeTaken").textContent=formatElapsed(timeTakenSeconds);
+  $("scorePercent").textContent=((score/examConfig.totalMarks)*100).toFixed(1)+"%";
+  $("rank").textContent=rankInfo.source==="online"
+    ? `🌐 Online Rank: ${rankInfo.rank} / ${rankInfo.participants} (इस टेस्ट को देने वाले सभी विद्यार्थियों में)`
+    : `इस Browser की Local Rank: ${rankInfo.rank} / ${rankInfo.participants} (केवल इसी Browser में सेव Results)`;
+  renderPerformanceChart(performanceRows,attemptRecord);
   $("review").innerHTML=
-    `<p><b>${esc(examConfig.title)}</b> • कुल ${examConfig.totalMarks} अंक</p>`+
+    `<p><b>${esc(examConfig.title)}</b> • कुल ${examConfig.totalMarks} अंक • समय ${esc(formatElapsed(timeTakenSeconds))}</p>`+
     test.questions.map((q,index)=>`<div class="${answers[index]===q.a?"right":"wrong"}">
       <b>Q${index+1}. ${esc(q.q)}</b><br>
       विद्यार्थी ने चुना: <b>${answers[index]===null?"कोई उत्तर नहीं":"ABCD"[answers[index]]+". "+esc(q.o[answers[index]])}</b><br>
@@ -984,10 +1101,11 @@ async function adminViewResult(resultId){
     const qs=Array.isArray(t?.questions)?t.questions:[];
     const ans=Array.isArray(r.answers)?r.answers:[];
     const review=Array.isArray(r.review)?r.review:[];
+    const resultMeta=review.find(item=>item&&item._meta)?review.find(item=>item&&item._meta)._meta:{};
 
     let html=`<button class="l" onclick="adminResults('${esc(r.exam_type||"AIIMS")}')">← वापस</button>
       <h3>${esc(r.exam_type||"AIIMS")} — ${esc(t?.name||("Test "+r.test_id))}</h3>
-      <p><b>नाम:</b> ${esc(r.student_name)}<br><b>Score:</b> ${formatScore(r.score)} • सही ${r.correct} • गलत ${r.wrong} • छोड़े ${r.skipped}</p>`;
+      <p><b>नाम:</b> ${esc(r.student_name)}<br><b>Score:</b> ${formatScore(r.score)} • सही ${r.correct} • गलत ${r.wrong} • छोड़े ${r.skipped}<br><b>टेस्ट में लगा समय:</b> ${resultMeta.time_taken_seconds!=null?esc(formatElapsed(resultMeta.time_taken_seconds)):"पुराने Result में समय सेव नहीं था"}</p>`;
     html+=qs.map((q,k)=>{
       const user=ans[k]; const correct=review[k]?.correctIndex??q.a;
       const cls=user===correct?"right":(user==null?"card":"wrong");
