@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#123b6d">
 <link rel="icon" type="image/png" href="./icon-512.png">
-<title>AIIMS / RML Hospital Attendant Mock Test — Trading Chart Edition</title>
+<title>AIIMS / RML Hospital Mock Test — Trading Chart Edition</title>
 <style>
 body{margin:0;font-family:Arial,sans-serif;background:#eef3f8;color:#172033}
 header{background:#123b6d;color:#fff;padding:14px;display:flex;justify-content:space-between;align-items:center}
@@ -79,7 +79,7 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 <body>
 
 <header>
-  <b>AIIMS / RML Hospital Attendant Mock Test</b>
+  <b>AIIMS / RML Hospital Mock Test</b>
   <span id="timer">18:00</span>
 </header>
 
@@ -88,8 +88,8 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 <section id="home" class="card">
   <h2>Mock Test App</h2>
   <p>अपना Exam चुनें</p>
-  <button class="p" onclick="chooseExam('AIIMS')">AIIMS Hospital Attendant</button>
-  <button class="g" onclick="chooseExam('RML')">RML Hospital Attendant</button>
+  <button class="p" onclick="chooseExam('AIIMS')">AIIMS Hospital</button>
+  <button class="g" onclick="chooseExam('RML')">RML Hospital</button>
   <br>
   <button class="l" onclick="adminLogin()">Owner / Admin</button>
 </section>
@@ -181,13 +181,13 @@ const ADMIN_CODE="8890";
 
 const EXAM_CONFIGS={
   "AIIMS":{
-    title:"AIIMS Hospital Attendant (CRE-5 Group Code 16)",
+    title:"AIIMS Hospital",
     sections:5, questionsPerSection:20, sectionSeconds:18*60,
     correctMarks:4, wrongMarks:-1, totalMarks:400,
     pattern:"100 प्रश्न • 90 मिनट • 5 Sections × 20 प्रश्न • सही +4 / गलत −1"
   },
   "RML":{
-    title:"RML Hospital Attendant Grade-II",
+    title:"RML Hospital",
     sections:1, questionsPerSection:100, sectionSeconds:120*60,
     correctMarks:1, wrongMarks:-0.25, totalMarks:100,
     pattern:"100 प्रश्न • 120 मिनट • सही +1 / गलत −0.25"
@@ -424,7 +424,7 @@ async function loadStudentTests(){
     const taken=getTakenTest(t);
     return `
     <div class="card ${taken?"takenCard":""}">
-      <b>${esc(t.name)}</b>${t.localOnly?` <span class="sectionPill">इस डिवाइस पर सेव</span>`:""}<br>
+      <b>${esc(displayExamName(t.name))}</b>${t.localOnly?` <span class="sectionPill">इस डिवाइस पर सेव</span>`:""}<br>
       ${taken?`<div class="takenTag">✅ यह टेस्ट आप पहले दे चुके हैं</div><br><small>आखिरी बार दिया: ${esc(displayDateTime(taken.completed_at))}</small><br><small>अंक: ${esc(formatScore(taken.score))}/${examConfig.totalMarks}${taken.time_taken_seconds!=null?` • समय: ${esc(formatElapsed(taken.time_taken_seconds))}`:""}${taken.rank?` • ${taken.rank_source==="online"?"Online":"Local"} Rank: ${taken.rank}/${taken.rank_total||"?"}`:""}</small><br>`:""}
       ${Array.isArray(t.questions)?t.questions.length:0} प्रश्न<br>
       ${examConfig.pattern}<br>कुल ${examConfig.totalMarks} अंक<br><br>
@@ -848,10 +848,10 @@ async function adminTests(){
     <button class="l" onclick="checkDatabaseConnection()">🔌 Database Connection Check</button>
     <p id="dbConnectionStatus">Connection check नहीं किया गया। Website HTTPS hosting पर खुली होनी चाहिए।</p>
     <div class="importbox">
-      <b>AIIMS Hospital Attendant</b><br>
+      <b>AIIMS Hospital</b><br>
       <button class="p" onclick="document.getElementById('aiimsJsonFile').click()">📥 AIIMS JSON Import</button>
       <input id="aiimsJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importExamJSON(event,'AIIMS')">
-      <br><br><b>RML Hospital Attendant</b><br>
+      <br><br><b>RML Hospital</b><br>
       <button class="g" onclick="document.getElementById('rmlJsonFile').click()">📥 RML JSON Import</button>
       <input id="rmlJsonFile" type="file" accept=".json,application/json" class="hide" onchange="importExamJSON(event,'RML')">
       <p>Server Admin Login होने पर टेस्ट Online Save होंगे। Login न हो तो इसी Browser में Local Save होंगे।</p>
@@ -866,7 +866,7 @@ async function adminTests(){
   const merged=[...remote,...local];
   const list=$("testList");
   if(list)list.innerHTML=merged.map(t=>`
-    <div class="card"><b>${esc(t.name)}</b><br>
+    <div class="card"><b>${esc(displayExamName(t.name))}</b><br>
       <b>Exam:</b> ${esc(EXAM_CONFIGS[t.exam_type]?.title||t.exam_type)} • ${t.published?"Published":"Draft"}<br>
       ${t.questions?.length||0} प्रश्न • ${t.duration} मिनट<br>
       ${t.localOnly?"<span class=\"sectionPill\">इस डिवाइस में Local Save</span>":"<span class=\"sectionPill\">Server</span>"}<br>
@@ -883,12 +883,12 @@ function newTest(initialType="AIIMS"){
 
     <label>Exam चुनें</label>
     <select id="examType" onchange="updateAdminTiming()">
-      <option value="AIIMS">AIIMS Hospital Attendant</option>
-      <option value="RML">RML Hospital Attendant Grade-II</option>
+      <option value="AIIMS">AIIMS Hospital</option>
+      <option value="RML">RML Hospital</option>
     </select>
 
     <label>Test का नाम</label>
-    <input id="tname" value="AIIMS Hospital Attendant - Test 1">
+    <input id="tname" value="AIIMS Hospital - Test 1">
 
     <label>समय (auto)</label>
     <input id="tdur" type="number" value="90" readonly>
@@ -1011,7 +1011,7 @@ function importExamJSON(ev, examType){
       if(questions.length!==100)throw Error("JSON फाइल में ठीक 100 प्रश्न होने चाहिए");
 
       newTest(examType);
-      $("tname").value=data.name||data.test_name||(
+      $("tname").value=displayExamName(data.name||data.test_name)||(
         EXAM_CONFIGS[examType].title+" - Test 1"
       );
       renderBuilder(questions);
@@ -1038,7 +1038,7 @@ function importIntoBuilder(ev){
       if(data.exam_type && data.exam_type!==$("examType").value){
         throw Error("यह JSON दूसरे Exam की है। ऊपर सही Exam चुनें या संबंधित Import बटन इस्तेमाल करें।");
       }
-      if(data.name||data.test_name)$("tname").value=data.name||data.test_name;
+      if(displayExamName(data.name||data.test_name))$("tname").value=displayExamName(data.name||data.test_name);
       renderBuilder(questions);
       $("importStatus").textContent=" ✅ 100 प्रश्न Import हो गए। अब Save Draft या Save & Publish दबाएँ।";
     }catch(e){
@@ -1085,7 +1085,8 @@ async function saveBuilder(publish){
     const type=$("examType").value;
     const config=EXAM_CONFIGS[type];
     if(!config)throw Error("कृपया AIIMS या RML Exam चुनें।");
-    const name=$("tname").value.trim()||(config.title+" - Test 1");
+    const name=displayExamName($("tname").value.trim()||(config.title+" - Test 1"));
+    $("tname").value=name;
     const duration=config.sections*config.sectionSeconds/60;
     if(questions.length!==100)throw Error("Test में 100 प्रश्न होने चाहिए।");
     const payload={name,duration,questions,published:!!publish,exam_type:type};
@@ -1152,10 +1153,10 @@ async function adminResults(filterExam=null){
     const testNames={};for(const item of (testsList||[]))testNames[String(item.id)]=item.name;
     const groups={};sorted.forEach(row=>{const key=String(row.exam_type)+"|"+String(row.test_id);(groups[key]??=[]).push(row);});
     let html=`<h3>Online Results / Rank</h3><div class="sectionBar">
-      <button class="l" onclick="adminResults()">सभी</button><button class="p" onclick="adminResults('AIIMS')">AIIMS Hospital Attendant</button><button class="g" onclick="adminResults('RML')">RML Hospital Attendant</button></div>`;
+      <button class="l" onclick="adminResults()">सभी</button><button class="p" onclick="adminResults('AIIMS')">AIIMS Hospital</button><button class="g" onclick="adminResults('RML')">RML Hospital</button></div>`;
     Object.keys(groups).forEach(key=>{
       const group=groups[key],testId=group[0].test_id,examType=group[0].exam_type;
-      html+=`<div class="card"><h3>${esc(EXAM_CONFIGS[examType].title)} — ${esc(testNames[String(testId)]||("Test "+testId))}</h3>
+      html+=`<div class="card"><h3>${esc(EXAM_CONFIGS[examType].title)} — ${esc(displayExamName(testNames[String(testId)]||("Test "+testId)))}</h3>
         <table><tr><th>Rank</th><th>नाम</th><th>अंक</th><th>सही</th><th>गलत</th><th>छोड़े</th><th>Details</th></tr>`;
       group.forEach((row,index)=>{html+=`<tr><td>${index+1}</td><td>${esc(row.student_name)}</td><td>${formatScore(row.score)}</td><td>${row.correct}</td><td>${row.wrong}</td><td>${row.skipped}</td><td><button class="l" onclick="adminViewResult(${row.id})">देखें</button></td></tr>`;});
       html+="</table></div>";
@@ -1181,7 +1182,7 @@ async function adminViewResult(resultId){
     const resultMeta=review.find(item=>item&&item._meta)?review.find(item=>item&&item._meta)._meta:{};
 
     let html=`<button class="l" onclick="adminResults('${esc(r.exam_type||"AIIMS")}')">← वापस</button>
-      <h3>${esc(r.exam_type||"AIIMS")} — ${esc(t?.name||("Test "+r.test_id))}</h3>
+      <h3>${esc(r.exam_type||"AIIMS")} — ${esc(displayExamName(t?.name||("Test "+r.test_id)))}</h3>
       <p><b>नाम:</b> ${esc(r.student_name)}<br><b>Score:</b> ${formatScore(r.score)} • सही ${r.correct} • गलत ${r.wrong} • छोड़े ${r.skipped}<br><b>टेस्ट में लगा समय:</b> ${resultMeta.time_taken_seconds!=null?esc(formatElapsed(resultMeta.time_taken_seconds)):"पुराने Result में समय सेव नहीं था"}</p>`;
     html+=qs.map((q,k)=>{
       const user=ans[k]; const correct=review[k]?.correctIndex??q.a;
@@ -1220,6 +1221,15 @@ function esc(s){
   );
 }
 
+function displayExamName(value){
+  return String(value??"")
+    .replace(/\bAttendant\b/gi, "")
+    .replace(/\bGrade\s*[-–]?\s*II\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([—–-])/g, " $1")
+    .trim();
+}
+
 function attr(s){
   return esc(s);
 }
@@ -1236,7 +1246,7 @@ if (window.pdfjsLib) {
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{
     navigator.serviceWorker.register("./service-worker.js")
-      .then(()=>console.log("AIIMS / RML Hospital Attendant App ready"))
+      .then(()=>console.log("AIIMS / RML Hospital App ready"))
       .catch(err=>console.error("Service Worker error:",err));
   });
 }
