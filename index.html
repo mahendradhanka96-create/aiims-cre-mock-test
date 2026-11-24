@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#123b6d">
 <link rel="icon" type="image/png" href="./icon-512.png">
-<title>AIIMS / RML Hospital Mock Test — Trading Chart Edition</title>
+<title>AIIMS / RML Hospital Mock Test — Score Dashboard</title>
 <style>
 body{margin:0;font-family:Arial,sans-serif;background:#eef3f8;color:#172033}
 header{background:#123b6d;color:#fff;padding:14px;display:flex;justify-content:space-between;align-items:center}
@@ -36,42 +36,39 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 .lockNote{background:#fff8e1;padding:10px;border-radius:8px;margin:8px 0}
 .takenCard{border:2px solid #159447}
 .takenTag{display:inline-block;background:#e8f7ed;color:#176b38;padding:6px 10px;border-radius:8px;font-weight:bold;margin:8px 0}
-.chartPanel{background:#101c2d;border-radius:14px;padding:12px;color:#eaf1fb;overflow:hidden}
-.chartPanel svg{display:block;width:100%;height:auto;overflow:visible}
-.chartCaption{display:flex;gap:12px;flex-wrap:wrap;color:#b9c8da;font-size:13px;margin-top:6px}
-.chartDot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#23c983;margin-right:5px}
-.chartRank{display:inline-block;background:#203750;border:1px solid #3c5878;border-radius:7px;padding:3px 7px;margin:3px;font-size:12px;color:#dbeafe}
 @media(max-width:600px){
 .grid{grid-template-columns:repeat(5,1fr)}
 .stats{grid-template-columns:repeat(2,1fr)}
 .sectionPill{font-size:12px;padding:7px 8px}
 }
 
-/* Trading-style performance dashboard */
-.tradingWrap{background:#081522;color:#e6edf6;border:1px solid #25364b;border-radius:16px;padding:14px;box-shadow:0 10px 28px #07111f22}
-.tradingHead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-.tradingHead .marketTag{font-size:11px;color:#9fb3c8;letter-spacing:.08em;text-transform:uppercase}
-.tradingHead .marketTitle{font-size:18px;font-weight:700;margin-top:3px}
-.tradingHead .periodTag{border:1px solid #334960;background:#102338;color:#c9d8e8;border-radius:6px;padding:5px 9px;font-size:12px}
-.tradingStats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:10px 0 14px}
-.tradingStat{background:#102338;border:1px solid #233b53;border-radius:9px;padding:10px;min-width:0}
-.tradingStat small{display:block;color:#93a9bf;font-size:11px;margin-bottom:5px}
-.tradingStat b{display:block;color:#f3f7fc;font-size:17px;overflow-wrap:anywhere}
-.tradingStat .positive{color:#24d18b}.tradingStat .negative{color:#ff667a}
-.tradingChartBox{background:#0b1928;border:1px solid #203449;border-radius:10px;padding:6px;overflow:hidden}
-.tradingChartBox svg{display:block;width:100%;height:auto;min-width:0}
-.tradingLegend{display:flex;gap:16px;flex-wrap:wrap;color:#a9bbcd;font-size:12px;padding:9px 4px 2px}
-.legendLine{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:6px;background:#21ca89;border-radius:4px}
-.legendBar{display:inline-block;width:9px;height:10px;vertical-align:middle;margin-right:6px;background:#277da8;border-radius:2px}
-.tradingHistory{display:grid;gap:7px;margin-top:12px}
-.tradingHistoryRow{display:grid;grid-template-columns:52px 1.2fr .8fr .9fr 1fr;gap:8px;align-items:center;background:#102338;border:1px solid #233b53;padding:9px;border-radius:8px;font-size:12px;color:#d8e4f0}
-.tradingHistoryRow small{color:#91a7bc}.tradingHistoryRow .up{color:#24d18b;font-weight:700}.tradingHistoryRow .down{color:#ff667a;font-weight:700}
-.tradingFoot{color:#8fa6bc;font-size:11px;margin-top:10px;line-height:1.5}
+/* Score dashboard: subject-wise result and complete test history */
+.subjectResultWrap{margin-top:14px;overflow-x:auto}
+.subjectResultTable,.scoreHistoryTable{width:100%;border-collapse:collapse;background:#fff}
+.subjectResultTable th,.subjectResultTable td,.scoreHistoryTable th,.scoreHistoryTable td{padding:9px 10px;border-bottom:1px solid #e1e7ef;text-align:left;vertical-align:middle}
+.subjectResultTable th,.scoreHistoryTable th{background:#edf3f9;font-size:13px;color:#31445c;white-space:nowrap}
+.subjectName{font-weight:700;min-width:150px}
+.countCell{text-align:center!important;font-variant-numeric:tabular-nums;white-space:nowrap}
+.markCell{font-weight:700;text-align:right!important;white-space:nowrap}
+.scoreDashboard{background:#fff;border:1px solid #dbe4ee;border-radius:14px;padding:14px}
+.scoreDashboardHead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.scoreDashboardHead h3{margin:0}
+.scoreSummaryTag{background:#eaf2fb;color:#174875;border-radius:20px;padding:5px 10px;font-size:12px;font-weight:700}
+.scoreTableWrap{overflow-x:auto;margin-top:12px}
+.scoreHistoryTable{min-width:840px}
+.scoreHistoryTable tr:hover td{background:#f8fbff}
+.scoreValue{display:inline-block;background:#eaf2fb;color:#123b6d;border:1px solid #cddded;border-radius:8px;padding:5px 8px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+.scorePercent{font-size:12px;color:#52657a;white-space:nowrap}
+.scoreMeta{font-size:12px;color:#596b80;line-height:1.5}
+.scoreHistoryTable details{margin-top:6px;font-size:12px;color:#28557d}
+.scoreHistoryTable details summary{cursor:pointer;font-weight:700}
+.scoreHistoryTable .retryButton{background:#1769aa;color:#fff;font-size:12px;padding:7px 9px;white-space:nowrap}
+.noHistory{background:#f5f8fb;border:1px dashed #bac8d8;padding:14px;border-radius:10px;color:#52657a}
+.breakdownTitle{margin:14px 0 6px}
 @media(max-width:600px){
- .tradingStats{grid-template-columns:repeat(2,minmax(0,1fr))}
- .tradingStat b{font-size:15px}
- .tradingHistoryRow{grid-template-columns:42px 1fr 1fr;}
- .tradingHistoryRow .histTime,.tradingHistoryRow .histRank{display:none}
+ .subjectResultTable th,.subjectResultTable td{padding:7px 6px;font-size:12px}
+ .subjectName{min-width:125px}
+ .scoreDashboard{padding:10px}
 }
 
 </style>
@@ -140,13 +137,17 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
       <div class="stat"><b id="scorePercent">—</b><br>प्राप्त प्रतिशत</div>
     </div>
     <h3 id="rank"></h3>
+    <div id="subjectBreakdown"></div>
     <button class="p" onclick="returnToTestList()">← टेस्ट सूची में वापस जाएँ</button>
   </div>
 
-  <div class="card">
-    <h3>📈 Performance Chart — Trading जैसा Score Graph</h3>
-    <p>हर बिंदु आपका एक पूरा किया हुआ टेस्ट दिखाता है। बिंदु पर माउस रखें या मोबाइल पर टैप करें, अंक, Rank और समय देखें।</p>
-    <div id="performanceChart"></div>
+  <div class="card scoreDashboard">
+    <div class="scoreDashboardHead">
+      <h3>📋 मेरे सभी टेस्ट के स्कोर</h3>
+      <span class="scoreSummaryTag">एक जगह पूरी हिस्ट्री</span>
+    </div>
+    <p class="scoreMeta">आपके इसी नाम से दिए गए AIIMS और RML के सभी टेस्ट यहाँ क्रम से दिखेंगे। कम अंक वाले टेस्ट को इसी सूची से दोबारा दे सकते हैं।</p>
+    <div id="allScores"></div>
   </div>
 
   <div class="card">
@@ -354,6 +355,7 @@ function markTestTaken(item,details){
     key,exam_type:item.exam_type||selectedExam,test_id:String(item.id),
     test_name:String(item.name||"Test"),completed_at:details.completed_at||new Date().toISOString(),
     score:details.score,correct:details.correct,wrong:details.wrong,skipped:details.skipped,
+    subject_breakdown:details.subject_breakdown||[],
     time_taken_seconds:details.time_taken_seconds,rank:details.rank,rank_total:details.rank_total,rank_source:details.rank_source
   };
   const index=records.findIndex(row=>row.key===key);
@@ -632,81 +634,174 @@ function localRankForAttempt(rows,record){
   return {rank:higher+1,participants:same.length,source:"local"};
 }
 
-function renderPerformanceChart(allRows,currentRecord){
-  const sameStudent=allRows.filter(row=>row.exam_type===currentRecord.exam_type&&
-    String(row.student_name||"").trim().toLowerCase()===String(currentRecord.student_name||"").trim().toLowerCase());
-  const rows=sameStudent.sort((a,b)=>new Date(a.completed_at)-new Date(b.completed_at)).slice(-12);
-  if(!rows.length){$("performanceChart").innerHTML="<p>अभी Chart के लिए कोई रिकॉर्ड नहीं है।</p>";return;}
-
-  const W=900,H=430,L=66,R=24,T=34,plotBottom=286,volumeTop=326,volumeBottom=386;
-  const plotW=W-L-R,plotH=plotBottom-T;
-  const pct=row=>Math.max(0,Math.min(100,(Number(row.score)||0)/(Number(row.total_marks)||100)*100));
-  const xAt=i=>rows.length===1?L+plotW/2:L+(plotW*i/(rows.length-1));
-  const yAt=row=>T+(100-pct(row))*plotH/100;
-  const pts=rows.map((row,i)=>({x:xAt(i),y:yAt(row),row,pct:pct(row),volume:Math.max(0,Math.min(100,(Number(row.correct)||0)+(Number(row.wrong)||0)))}));
-  const grid=[0,25,50,75,100].map(v=>{
-    const y=T+(100-v)*plotH/100;
-    return `<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#263b50" stroke-width="1" stroke-dasharray="3 5"/><text x="${L-12}" y="${y+4}" text-anchor="end" font-size="12" fill="#8fa6bc">${v}%</text>`;
+function normalizeSubjectCategory(value){
+  if(value==null||String(value).trim()==="")return null;
+  const s=String(value).trim().toLowerCase();
+  if(/hospital|attendant|first.?aid|patient|medical|अस्पताल|परिचार|प्राथमिक उपचार|मरीज|रोगी/.test(s))return "Hospital Service";
+  if(/general.?knowledge|gk|current.?affair|सामान्य ज्ञान|करेंट/.test(s))return "General Knowledge";
+  if(/reason|aptitude|logic|तर्क|रीजनिंग/.test(s))return "Reasoning";
+  if(/math|quant|गणित|अंकगणित/.test(s))return "Mathematics";
+  if(/english|अंग्रेजी|अंग्रेज़ी/.test(s))return "English";
+  if(/computer|कंप्यूटर/.test(s))return "General Knowledge";
+  return null;
+}
+function mostlyEnglishQuestion(text){
+  const t=String(text||"");
+  const latin=(t.match(/[A-Za-z]/g)||[]).length;
+  const devan=(t.match(/[\u0900-\u097F]/g)||[]).length;
+  return latin>=18 && devan<=4;
+}
+function isReasoningQuestion(text){
+  return /(कूट भाषा|कूट संकेत|श्रृंखला|अगली संख्या|निष्कर्ष|कथन|दिशा|दिशाओं|संबंध|रिश्ते|रिश्ता|भाई|बहन|पिता|माता|बैठे हैं|बैठक व्यवस्था|क्रम में|सही क्रम|सादृश्य|पासा|घन के|घन को|दर्पण|आकृति|वर्गीकरण|अलग है|तर्क के आधार|न्यूनतम.*व्यक्ति|बाएँ.*दाएँ|दाएँ.*बाएँ|कोड भाषा|संकेत भाषा|निर्धारित नियम)/i.test(text);
+}
+function isMathQuestion(text){
+  return /(प्रतिशत|लाभ|हानि|ब्याज|मूलधन|चक्रवृद्धि|साधारण ब्याज|औसत|अनुपात|प्रायिकता|क्षेत्रफल|परिमाप|आयतन|व्यास|त्रिज्या|वर्गमूल|महत्तम समापवर्तक|लघुत्तम समापवर्त्य|भागफल|शेषफल|भिन्न|समीकरण|गुणनखंड|गति|दूरी|रेल.?गाड़ी|ट्रेन|किमी\s*\/|किलोमीटर|मीटर|सेमी|घन मीटर|घंटे में भरता|नल .*घंटे|कितने दिन|विक्रय मूल्य|क्रय मूल्य|अंकगणित|संख्या का \d|संख्या में.*वृद्धि|संख्या में.*कमी|कितना होगा.*रुपये|₹|रुपये.*कितना|विकर्ण|परिणाम.*कितना)/i.test(text);
+}
+function isGeneralKnowledgeQuestion(text){
+  return /(भारत|भारतीय|संविधान|राष्ट्रीय|राजधानी|उपनिषद|इतिहास|आंदोलन|संसद|लोकसभा|राज्यसभा|अनुच्छेद|संशोधन|किस वर्ष|किसने स्थापना|स्थापना किसने|पंचवर्षीय योजना|चंद्रयान|ओजोन|ग्रह कौन|नदी कौन|झील कौन|वन्यजीव|प्रोजेक्ट टाइगर|अंतरराष्ट्रीय|विश्व|राष्ट्रपति|प्रधानमंत्री|मुख्यमंत्री|राज्यपाल|राज्य सरकार|उत्तर प्रदेश के|लखनऊ किस|राष्ट्रीय वृक्ष|राष्ट्रीय पशु|राष्ट्रीय जलीय|राष्ट्रीय खेल|स्वतंत्रता दिवस|गणतंत्र दिवस|वायुमंडल की किस|सबसे बड़ा महाद्वीप|सबसे बड़ा ग्रह|भूकंप.*यंत्र|सेस्मोग्राफ|सेस्मोमीटर)/i.test(text);
+}
+function isHospitalQuestion(text){
+  return /(मरीज|रोगी|परिचारक|अटेंडेंट|वार्ड|अस्पताल|चिकित्स|प्राथमिक उपचार|घाव|रक्त|साँस|सांस|हृदय|नाड़ी|रक्तचाप|बुखार|टीका|टीकाकरण|दवा|इंजेक्शन|सुई|संक्रमण|जीवाणु|विषाणु|ऑक्सीजन|स्ट्रेचर|व्हीलचेयर|बिस्तर|बेड|नर्स|चिकित्सा|शल्य|ऑपरेशन|नवजात|शिशु|गर्भ|प्रसूति|दबाव.?चोट|जलना|फ्रैक्चर|अस्थि|त्वचा|आँख|कान|फेफड़े|यकृत|गुर्दा|मूत्र|मल|सक्शन|इनक्यूबेटर|ग्लूकोज|मधुमेह|एनीमिया|हीमोग्लोबिन|लाल रक्त कोशिका|श्वेत रक्त कोशिका|टिटनेस|रेबीज|मिर्गी|दौरा|बेहोश|अचेत|जहर|विषाक्त|ड्रेसिंग|बैंडेज|चोट|दर्द|प्लास्टर|नमूना|जाँच विभाग|प्रयोगशाला|मेडिकल गैस|वेंटिलेटर|ईसीजी|एक्स-रे|अल्ट्रासाउंड|विकिरण|कैंसर|मनोवैज्ञानिक|गरिमा|गोपनीयता|सहमति)/i.test(text);
+}
+function isRmlSectionOrdered(questions){
+  if(!Array.isArray(questions)||questions.length!==100)return false;
+  const count=(start,end,fn)=>questions.slice(start,end).filter(q=>fn(String(q.q||q.question||""))).length;
+  // Newer RML sets use 60 domain + 10 GK + 10 reasoning + 10 maths + 10 English in this order.
+  return count(90,100,mostlyEnglishQuestion)>=8 &&
+    count(80,90,isMathQuestion)>=3 &&
+    count(70,80,isReasoningQuestion)>=3 &&
+    count(60,70,isGeneralKnowledgeQuestion)>=4;
+}
+function getQuestionSubject(question,index,examType,orderedRml){
+  const explicit=normalizeSubjectCategory(question?.category??question?.subject??question?.section??question?.topic);
+  if(explicit)return explicit;
+  if(examType==="RML"&&orderedRml){
+    if(index<60)return "Hospital Service";
+    if(index<70)return "General Knowledge";
+    if(index<80)return "Reasoning";
+    if(index<90)return "Mathematics";
+    return "English";
+  }
+  const text=String(question?.q??question?.question??"");
+  if(mostlyEnglishQuestion(text))return "English";
+  if(isReasoningQuestion(text))return "Reasoning";
+  if(isMathQuestion(text))return "Mathematics";
+  if(isHospitalQuestion(text))return "Hospital Service";
+  if(isGeneralKnowledgeQuestion(text))return "General Knowledge";
+  // Unclassified domain questions are counted under hospital service rather than hidden.
+  return "Hospital Service";
+}
+function calculateSubjectBreakdown(questions,answerList,examType){
+  const orderedRml=examType==="RML"&&isRmlSectionOrdered(questions);
+  const order=["Hospital Service","General Knowledge","Reasoning","Mathematics","English"];
+  const labels={
+    "Hospital Service":"अस्पताल सेवा / प्राथमिक उपचार",
+    "General Knowledge":"सामान्य ज्ञान",
+    "Reasoning":"तर्कशक्ति",
+    "Mathematics":"गणितीय अभिरुचि",
+    "English":"English"
+  };
+  const stats={};
+  questions.forEach((q,index)=>{
+    const subject=getQuestionSubject(q,index,examType,orderedRml);
+    if(!stats[subject])stats[subject]={subject,label:labels[subject]||subject,total:0,correct:0,wrong:0,skipped:0};
+    const row=stats[subject];row.total++;
+    const answer=answerList[index];
+    if(answer==null)row.skipped++;
+    else if(answer===q.a)row.correct++;
+    else row.wrong++;
+  });
+  return order.filter(subject=>stats[subject]).map(subject=>{
+    const row=stats[subject];
+    row.score=Number((row.correct*examConfig.correctMarks+row.wrong*examConfig.wrongMarks).toFixed(2));
+    row.max_marks=row.total*examConfig.correctMarks;
+    row.attempted=row.correct+row.wrong;
+    return row;
+  });
+}
+function renderSubjectBreakdown(rows){
+  if(!Array.isArray(rows)||!rows.length)return "<p class='noHistory'>इस टेस्ट का विषयवार विवरण उपलब्ध नहीं है।</p>";
+  const total={total:0,correct:0,wrong:0,skipped:0,score:0,max_marks:0};
+  rows.forEach(r=>Object.keys(total).forEach(k=>total[k]+=Number(r[k])||0));
+  return `<h3 class="breakdownTitle">विषयवार प्रदर्शन</h3>
+    <div class="subjectResultWrap"><table class="subjectResultTable">
+      <thead><tr><th>विषय</th><th class="countCell">कुल प्रश्न</th><th class="countCell">सही</th><th class="countCell">गलत</th><th class="countCell">छोड़े</th><th class="markCell">अंक</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr><td class="subjectName">${esc(r.label||r.subject)}</td><td class="countCell">${r.total}</td><td class="countCell">${r.correct}</td><td class="countCell">${r.wrong}</td><td class="countCell">${r.skipped}</td><td class="markCell">${formatScore(r.score)} / ${formatScore(r.max_marks)}</td></tr>`).join("")}
+      <tr><th>कुल</th><th class="countCell">${total.total}</th><th class="countCell">${total.correct}</th><th class="countCell">${total.wrong}</th><th class="countCell">${total.skipped}</th><th class="markCell">${formatScore(total.score)} / ${formatScore(total.max_marks)}</th></tr></tbody>
+    </table></div>`;
+}
+function getRecordDate(row){return row.completed_at||row.created_at||row.date||null;}
+function getRecordIdentity(row){
+  const date=getRecordDate(row);
+  const time=date?Math.floor(new Date(date).getTime()/5000):"no-date";
+  return [row.exam_type,String(row.test_id),formatScore(row.score),time].join("|");
+}
+function collectAllStudentScores(currentRecord){
+  const targetName=String(currentRecord.student_name||"").trim().toLowerCase();
+  const rows=[];const seen=new Set();
+  const add=row=>{
+    const rowName=String(row.student_name||"").trim().toLowerCase();
+    if(rowName!==targetName)return;
+    const identity=getRecordIdentity(row);
+    if(seen.has(identity))return;
+    seen.add(identity);rows.push(row);
+  };
+  readPerformanceHistory().forEach(add);
+  // Older local attempts may exist in the result store but not in performance history.
+  readLocalResults().forEach(row=>{
+    const review=Array.isArray(row.review)?row.review:[];
+    const meta=review.find(item=>item&&item._meta)?review.find(item=>item&&item._meta)._meta:{};
+    add({
+      test_id:row.test_id,exam_type:row.exam_type,student_name:row.student_name,
+      test_name:row.test_name||("Test "+String(row.test_id)),score:row.score,
+      total_marks:EXAM_CONFIGS[row.exam_type]?.totalMarks||100,
+      correct:row.correct,wrong:row.wrong,skipped:row.skipped,
+      time_taken_seconds:meta.time_taken_seconds,completed_at:meta.completed_at||row.created_at,
+      subject_breakdown:meta.subject_breakdown||[],rank:row.rank,rank_total:row.rank_total
+    });
+  });
+  add(currentRecord);
+  return rows.sort((a,b)=>new Date(getRecordDate(b)||0)-new Date(getRecordDate(a)||0));
+}
+function renderAllScores(currentRecord){
+  const rows=collectAllStudentScores(currentRecord);
+  if(!rows.length){$("allScores").innerHTML="<div class='noHistory'>अभी कोई टेस्ट हिस्ट्री सेव नहीं है।</div>";return;}
+  const body=rows.map((row,index)=>{
+    const cfg=EXAM_CONFIGS[row.exam_type]||EXAM_CONFIGS.RML;
+    const total=Number(row.total_marks)||cfg.totalMarks;
+    const pct=total?((Number(row.score)||0)/total*100):0;
+    const breakdown=Array.isArray(row.subject_breakdown)&&row.subject_breakdown.length
+      ? `<details><summary>विषयवार विवरण देखें</summary>${renderSubjectBreakdown(row.subject_breakdown)}</details>`
+      : `<details><summary>विषयवार विवरण</summary><span class="scoreMeta">यह पुराना Result है; उस समय विषयवार रिकॉर्ड सेव नहीं हुआ था।</span></details>`;
+    const testName=row.test_name||("Test "+String(row.test_id||""));
+    const canRetry=row.test_id!=null&&row.exam_type&&EXAM_CONFIGS[row.exam_type];
+    return `<tr>
+      <td>${index+1}</td>
+      <td><b>${esc(cfg.title)}</b><br><span class="scoreMeta">${esc(testName)}</span>${breakdown}</td>
+      <td><span class="scoreValue">${formatScore(row.score)} / ${total}</span><br><span class="scorePercent">${pct.toFixed(1)}%</span></td>
+      <td class="countCell">${Number(row.correct)||0} / ${Number(row.wrong)||0} / ${Number(row.skipped)||0}<br><span class="scoreMeta">सही / गलत / छोड़े</span></td>
+      <td class="scoreMeta">${row.time_taken_seconds!=null?esc(formatElapsed(row.time_taken_seconds)):"—"}<br>${esc(displayDateTime(getRecordDate(row)))}</td>
+      <td>${canRetry?`<button class="retryButton" data-exam="${attr(row.exam_type)}" data-id="${attr(row.test_id)}" data-student="${attr(row.student_name||currentRecord.student_name||"")}" onclick="retryTestFromDashboard(this)">फिर से दें</button>`:"—"}</td>
+    </tr>`;
   }).join("");
-  const verticals=pts.map(p=>`<line x1="${p.x}" y1="${T}" x2="${p.x}" y2="${volumeBottom}" stroke="#1c3044" stroke-width="1" stroke-dasharray="2 7"/>`).join("");
-  const linePath=pts.map((p,i)=>(i?"L":"M")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
-  const areaPath=linePath+` L ${pts[pts.length-1].x.toFixed(1)},${plotBottom} L ${pts[0].x.toFixed(1)},${plotBottom} Z`;
-  const area=`<path d="${areaPath}" fill="url(#tradingScoreFill)"/>`;
-  const segments=pts.slice(1).map((p,i)=>{
-    const prev=pts[i];
-    const color=p.pct>=prev.pct?"#20cf91":"#ff6478";
-    return `<line x1="${prev.x}" y1="${prev.y}" x2="${p.x}" y2="${p.y}" stroke="${color}" stroke-width="3.5" stroke-linecap="round"/>`;
-  }).join("");
-  const dots=pts.map((p,i)=>{
-    const color=i===0?"#56b9ff":(p.pct>=pts[i-1].pct?"#20cf91":"#ff6478");
-    const rankText=p.row.rank?`Rank ${p.row.rank}/${p.row.rank_total||"?"}`:"Rank उपलब्ध नहीं";
-    const title=`${p.row.test_name||"Test"} | ${formatScore(p.row.score)}/${p.row.total_marks} अंक (${p.pct.toFixed(1)}%) | ${rankText} | समय ${formatElapsed(p.row.time_taken_seconds)} | ${displayDateTime(p.row.completed_at)}`;
-    const label=rows.length<=8?`<text x="${p.x}" y="${Math.max(15,p.y-14)}" text-anchor="middle" font-size="12" font-weight="700" fill="#e8f1fb">${p.pct.toFixed(0)}%</text>`:"";
-    return `<g><circle cx="${p.x}" cy="${p.y}" r="11" fill="${color}" opacity=".16"/><circle cx="${p.x}" cy="${p.y}" r="5.5" fill="${color}" stroke="#eaf4ff" stroke-width="1.5"><title>${esc(title)}</title></circle>${label}</g>`;
-  }).join("");
-  const volMax=Math.max(10,...pts.map(p=>p.volume));
-  const volBars=pts.map((p,i)=>{
-    const barH=Math.max(3,(p.volume/100)*(volumeBottom-volumeTop));
-    const bw=Math.min(34,Math.max(12,plotW/Math.max(rows.length*2,3)));
-    const color=i===0?"#277da8":(p.pct>=pts[i-1].pct?"#168b70":"#9c4d5e");
-    const title=`T${i+1}: ${p.volume} प्रश्न हल किए (${p.row.correct||0} सही, ${p.row.wrong||0} गलत)`;
-    return `<rect x="${p.x-bw/2}" y="${volumeBottom-barH}" width="${bw}" height="${barH}" rx="3" fill="${color}" opacity=".9"><title>${esc(title)}</title></rect>`;
-  }).join("");
-  const xLabels=pts.map((p,i)=>`<text x="${p.x}" y="${plotBottom+20}" text-anchor="middle" font-size="11" fill="#9bb0c4">T${i+1}</text>`).join("");
-  const latest=rows[rows.length-1];
-  const lastPct=pct(latest);
-  const prevPct=rows.length>1?pct(rows[rows.length-2]):null;
-  const change=prevPct===null?null:lastPct-prevPct;
-  const changeText=change===null?"पहला टेस्ट":`${change>=0?"+":""}${change.toFixed(1)} प्रतिशत अंक`;
-  const changeClass=change===null?"":(change>=0?"positive":"negative");
-  const latestRank=latest.rank?`${latest.rank}/${latest.rank_total||"?"}`:"उपलब्ध नहीं";
-  const hist=pts.map((p,i)=>{
-    const diff=i===0?null:p.pct-pts[i-1].pct;
-    const diffTxt=diff===null?"पहला रिकॉर्ड":`${diff>=0?"▲ +":"▼ "}${diff.toFixed(1)}%`;
-    const diffClass=diff===null?"":(diff>=0?"up":"down");
-    const rank=p.row.rank?`${p.row.rank}/${p.row.rank_total||"?"}`:"—";
-    return `<div class="tradingHistoryRow"><b>T${i+1}</b><span>${formatScore(p.row.score)}/${p.row.total_marks}<br><small>${p.pct.toFixed(1)}% स्कोर</small></span><span class="${diffClass}">${diffTxt}</span><span class="histRank">Rank ${rank}</span><span class="histTime">${formatElapsed(p.row.time_taken_seconds)}</span></div>`;
-  }).reverse().join("");
-
-  $("performanceChart").innerHTML=`<div class="tradingWrap">
-    <div class="tradingHead"><div><div class="marketTag">PERFORMANCE / ${esc(currentRecord.exam_type||"EXAM")} / SCORE TREND</div><div class="marketTitle">आपकी टेस्ट परफॉर्मेंस</div></div><span class="periodTag">LAST ${rows.length} TEST${rows.length===1?"":"S"}</span></div>
-    <div class="tradingStats">
-      <div class="tradingStat"><small>अंतिम स्कोर</small><b>${formatScore(latest.score)} / ${latest.total_marks}</b></div>
-      <div class="tradingStat"><small>स्कोर प्रतिशत</small><b>${lastPct.toFixed(1)}%</b></div>
-      <div class="tradingStat"><small>पिछले टेस्ट से बदलाव</small><b class="${changeClass}">${changeText}</b></div>
-      <div class="tradingStat"><small>रैंक / लगा समय</small><b>${latestRank}</b><small>${formatElapsed(latest.time_taken_seconds)}</small></div>
-    </div>
-    <div class="tradingChartBox"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="टेस्ट स्कोर का Trading style performance chart">
-      <defs><linearGradient id="tradingScoreFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#20cf91" stop-opacity=".24"/><stop offset="100%" stop-color="#20cf91" stop-opacity="0"/></linearGradient></defs>
-      ${grid}${verticals}<text x="${L}" y="18" font-size="11" fill="#92a9bf">SCORE %</text>${area}${segments}${dots}
-      <line x1="${L}" y1="${plotBottom}" x2="${W-R}" y2="${plotBottom}" stroke="#334b62"/>${xLabels}
-      <text x="${L}" y="${volumeTop-9}" font-size="11" fill="#92a9bf">VOLUME • ATTEMPTED QUESTIONS</text>
-      <line x1="${L}" y1="${volumeBottom}" x2="${W-R}" y2="${volumeBottom}" stroke="#334b62"/>${volBars}
-      <text x="${W-R}" y="${H-10}" text-anchor="end" font-size="10" fill="#8fa6bc">पुराना टेस्ट  ←  टेस्ट क्रम  →  नया टेस्ट</text>
-    </svg><div class="tradingLegend"><span><i class="legendLine"></i>स्कोर ट्रेंड • हरा = सुधार • लाल = गिरावट</span><span><i class="legendBar"></i>वॉल्यूम = हल किए गए प्रश्न</span></div></div>
-    <div class="tradingHistory"><b style="font-size:13px;color:#e5edf6">टेस्ट हिस्ट्री</b>${hist}</div>
-    <div class="tradingFoot">यह चार्ट आपके इसी नाम और इसी Exam के पिछले ${rows.length} टेस्ट दिखाता है। नया टेस्ट देने पर नया पॉइंट और वॉल्यूम बार जुड़ेगा। एक टेस्ट होने पर एक पॉइंट दिखेगा; ट्रेंड लाइन कई टेस्ट के बाद बनेगी।</div>
-  </div>`;
+  $("allScores").innerHTML=`<div class="scoreTableWrap"><table class="scoreHistoryTable">
+    <thead><tr><th>क्रम</th><th>टेस्ट</th><th>आपका स्कोर</th><th>सही / गलत / छोड़े</th><th>समय / दिनांक</th><th>दोबारा टेस्ट</th></tr></thead>
+    <tbody>${body}</tbody></table></div>
+    <p class="scoreMeta">कुल ${rows.length} प्रयास • नवीनतम टेस्ट सबसे ऊपर • कम स्कोर वाले टेस्ट को “फिर से दें” से दोबारा हल करें।</p>`;
+}
+async function retryTestFromDashboard(button){
+  const examType=button?.dataset?.exam;
+  const testId=button?.dataset?.id;
+  const studentName=button?.dataset?.student||"";
+  if(!EXAM_CONFIGS[examType]||!testId)return alert("इस टेस्ट की जानकारी उपलब्ध नहीं है।");
+  selectedExam=examType;examConfig=EXAM_CONFIGS[examType];
+  const parts=studentName.trim().split(/\s+/);
+  $("firstName").value=parts.shift()||"";
+  $("lastName").value=parts.join(" ")||"नाम";
+  await student();
+  const available=tests.some(row=>String(row.id)===String(testId));
+  if(!available)return alert("यह टेस्ट अब Published सूची में उपलब्ध नहीं है। Owner/Admin से इसे फिर से Publish कराएँ।");
+  start(testId);
 }
 async function submitTest(auto=false){
   if(submitted)return;
@@ -722,9 +817,10 @@ async function submitTest(auto=false){
     else wrongCount++;
   });
   const score=Number((correctCount*examConfig.correctMarks+wrongCount*examConfig.wrongMarks).toFixed(2));
+  const subjectBreakdown=calculateSubjectBreakdown(test.questions,answers,selectedExam);
   const reviewData=test.questions.map((q,index)=>({user:answers[index],correctIndex:q.a,correct:answers[index]===q.a}));
-  // Metadata is stored as an extra trailing review item so the existing database schema remains compatible.
-  reviewData.push({_meta:{time_taken_seconds:timeTakenSeconds,completed_at:completedAt}});
+  // Extra result metadata is stored inside the existing JSON review field; no SQL change is required.
+  reviewData.push({_meta:{time_taken_seconds:timeTakenSeconds,completed_at:completedAt,subject_breakdown:subjectBreakdown}});
   const studentName=($("firstName").value.trim()+" "+$("lastName").value.trim()).trim();
   const payload={
     test_id:Number(test.id),exam_type:selectedExam,student_name:studentName,
@@ -759,6 +855,7 @@ async function submitTest(auto=false){
     test_id:String(test.id),test_name:String(test.name||"Test"),exam_type:selectedExam,
     student_name:studentName,score,total_marks:examConfig.totalMarks,
     correct:correctCount,wrong:wrongCount,skipped:skippedCount,
+    subject_breakdown:subjectBreakdown,
     time_taken_seconds:timeTakenSeconds,completed_at:completedAt,
     rank:rankInfo?.rank||null,rank_total:rankInfo?.participants||null,
     rank_source:rankInfo?.source||null,online:serverSaved
@@ -779,7 +876,8 @@ async function submitTest(auto=false){
   }
   try{
     markTestTaken(test,{score,correct:correctCount,wrong:wrongCount,skipped:skippedCount,
-      completed_at:completedAt,time_taken_seconds:timeTakenSeconds,rank:rankInfo.rank,rank_total:rankInfo.participants,rank_source:rankInfo.source});
+      completed_at:completedAt,time_taken_seconds:timeTakenSeconds,rank:rankInfo.rank,rank_total:rankInfo.participants,rank_source:rankInfo.source,
+    subject_breakdown:subjectBreakdown});
   }catch(takenError){console.warn("Test completion mark could not be saved:",takenError);}
   show("result");
   if($("totalMarksLabel"))$("totalMarksLabel").textContent=examConfig.totalMarks;
@@ -790,7 +888,8 @@ async function submitTest(auto=false){
   $("rank").textContent=rankInfo.source==="online"
     ? `🌐 Online Rank: ${rankInfo.rank} / ${rankInfo.participants} (इस टेस्ट को देने वाले सभी विद्यार्थियों में)`
     : `इस Browser की Local Rank: ${rankInfo.rank} / ${rankInfo.participants} (केवल इसी Browser में सेव Results)`;
-  renderPerformanceChart(performanceRows,attemptRecord);
+  $("subjectBreakdown").innerHTML=renderSubjectBreakdown(subjectBreakdown);
+  renderAllScores(attemptRecord);
   $("review").innerHTML=
     `<p><b>${esc(examConfig.title)}</b> • कुल ${examConfig.totalMarks} अंक • समय ${esc(formatElapsed(timeTakenSeconds))}</p>`+
     test.questions.map((q,index)=>`<div class="${answers[index]===q.a?"right":"wrong"}">
@@ -968,6 +1067,16 @@ function renderBuilder(qs){
           placeholder="D विकल्प"
           value="${attr(q.o[3]||"")}">
 
+        <label>विषय (वैकल्पिक — Auto अपने-आप पहचानेगा):</label>
+        <select id="c${i}">
+          <option value="AUTO" ${!q.category?"selected":""}>Auto पहचानें</option>
+          <option value="Hospital Service" ${q.category==="Hospital Service"?"selected":""}>अस्पताल सेवा / प्राथमिक उपचार</option>
+          <option value="General Knowledge" ${q.category==="General Knowledge"?"selected":""}>सामान्य ज्ञान</option>
+          <option value="Reasoning" ${q.category==="Reasoning"?"selected":""}>तर्कशक्ति</option>
+          <option value="Mathematics" ${q.category==="Mathematics"?"selected":""}>गणित</option>
+          <option value="English" ${q.category==="English"?"selected":""}>English</option>
+        </select>
+
         <label>सही उत्तर:</label>
 
         <select id="a${i}">
@@ -995,7 +1104,9 @@ function normalizeImportedQuestions(list){
     a=Number(a);
     if(!question||!Array.isArray(options)||options.length!==4||![0,1,2,3].includes(a))
       throw Error("प्रश्न "+(i+1)+" का format गलत है");
-    return {q:String(question),o:options.map(String),a};
+    const rawCategory=q.category??q.subject??q.section??q.topic??null;
+    const category=normalizeSubjectCategory(rawCategory);
+    return {q:String(question),o:options.map(String),a,category};
   });
 }
 
@@ -1073,7 +1184,9 @@ function collectBuilder(){
     if(!q||o.some(x=>!x))
       throw Error("प्रश्न "+(i+1)+" अधूरा है");
 
-    qs.push({q,o,a});
+    const rawCategory=$("c"+i)?.value||"AUTO";
+    const category=rawCategory==="AUTO"?null:normalizeSubjectCategory(rawCategory);
+    qs.push({q,o,a,category});
   }
 
   return qs;
@@ -1184,6 +1297,7 @@ async function adminViewResult(resultId){
     let html=`<button class="l" onclick="adminResults('${esc(r.exam_type||"AIIMS")}')">← वापस</button>
       <h3>${esc(r.exam_type||"AIIMS")} — ${esc(displayExamName(t?.name||("Test "+r.test_id)))}</h3>
       <p><b>नाम:</b> ${esc(r.student_name)}<br><b>Score:</b> ${formatScore(r.score)} • सही ${r.correct} • गलत ${r.wrong} • छोड़े ${r.skipped}<br><b>टेस्ट में लगा समय:</b> ${resultMeta.time_taken_seconds!=null?esc(formatElapsed(resultMeta.time_taken_seconds)):"पुराने Result में समय सेव नहीं था"}</p>`;
+    if(Array.isArray(resultMeta.subject_breakdown))html+=renderSubjectBreakdown(resultMeta.subject_breakdown);
     html+=qs.map((q,k)=>{
       const user=ans[k]; const correct=review[k]?.correctIndex??q.a;
       const cls=user===correct?"right":(user==null?"card":"wrong");
