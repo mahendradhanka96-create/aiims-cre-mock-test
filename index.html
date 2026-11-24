@@ -42,6 +42,13 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
 .sectionPill{font-size:12px;padding:7px 8px}
 }
 
+/* Student score history sync */
+.myScoresCard{margin:14px 0;background:#f8fbff;border:1px solid #dbe4ee}
+.myScoresCard h3{margin-top:0}
+.historySyncBox{border:1px solid #d7e1ed;border-radius:10px;padding:12px;margin:10px 0;background:#f8fbff}
+.historySyncBox label{display:block;font-weight:700;margin:8px 0 4px}
+.historySyncBox input{width:100%;box-sizing:border-box;padding:10px;border:1px solid #c8d3df;border-radius:8px;margin-bottom:4px}
+.historySyncStatus{font-size:13px;color:#40566d;margin-top:8px;white-space:pre-wrap}
 /* Score dashboard: subject-wise result and complete test history */
 .subjectResultWrap{margin-top:14px;overflow-x:auto}
 .subjectResultTable,.scoreHistoryTable{width:100%;border-collapse:collapse;background:#fff}
@@ -97,6 +104,13 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
   <input id="firstName" placeholder="First Name">
   <input id="lastName" placeholder="Last Name">
 
+  <div class="card myScoresCard">
+    <h3>📋 मेरे पहले दिए हुए सभी टेस्ट के स्कोर</h3>
+    <p class="scoreMeta">वही नाम भरें जो आपने पुराने टेस्ट देते समय लिखा था। पुराने Online स्कोर को Supabase Admin सत्यापन के बाद यहाँ जोड़ा जा सकता है।</p>
+    <button class="l" onclick="openMyScoreDashboard()">मेरे स्कोर देखें / पुराने स्कोर जोड़ें</button>
+    <div id="studentScorePanel"></div>
+  </div>
+
   <div id="tests"></div>
 </section>
 
@@ -147,7 +161,9 @@ td,th{padding:8px;border-bottom:1px solid #ddd;text-align:left}
       <span class="scoreSummaryTag">एक जगह पूरी हिस्ट्री</span>
     </div>
     <p class="scoreMeta">आपके इसी नाम से दिए गए AIIMS और RML के सभी टेस्ट यहाँ क्रम से दिखेंगे। कम अंक वाले टेस्ट को इसी सूची से दोबारा दे सकते हैं।</p>
+    <button class="l" onclick="renderHistorySyncBox('resultHistorySyncBox')">पुराने Online स्कोर भी जोड़ें / अपडेट करें</button>
     <div id="allScores"></div>
+    <div id="resultHistorySyncBox"></div>
   </div>
 
   <div class="card">
@@ -436,6 +452,7 @@ async function loadStudentTests(){
 }
 async function student(){
   show("student");
+  if($("studentScorePanel")&&!$("studentScorePanel").innerHTML.trim())$("studentScorePanel").innerHTML="";
   $("studentExamTitle").textContent=examConfig.title+" — विद्यार्थी की जानकारी";
   if($("totalMarksLabel")) $("totalMarksLabel").textContent=examConfig.totalMarks;
   await loadStudentTests();
@@ -732,21 +749,29 @@ function renderSubjectBreakdown(rows){
 }
 function getRecordDate(row){return row.completed_at||row.created_at||row.date||null;}
 function getRecordIdentity(row){
+  if(row.supabase_result_id!=null)return "SUPABASE|"+String(row.supabase_result_id);
+  if(row.attempt_id)return "ATTEMPT|"+String(row.attempt_id);
   const date=getRecordDate(row);
   const time=date?Math.floor(new Date(date).getTime()/5000):"no-date";
   return [row.exam_type,String(row.test_id),formatScore(row.score),time].join("|");
 }
 function collectAllStudentScores(currentRecord){
-  const targetName=String(currentRecord.student_name||"").trim().toLowerCase();
+  const targetName=normalizeStudentName(currentRecord.student_name);
   const rows=[];const seen=new Set();
   const add=row=>{
-    const rowName=String(row.student_name||"").trim().toLowerCase();
+    const rowName=normalizeStudentName(row.student_name);
     if(rowName!==targetName)return;
     const identity=getRecordIdentity(row);
     if(seen.has(identity))return;
     seen.add(identity);rows.push(row);
   };
   readPerformanceHistory().forEach(add);
+  // Older local test-completion markers may contain scores even if no performance row was written.
+  readTakenTests().forEach(row=>add({
+    test_id:row.test_id,exam_type:row.exam_type,student_name:targetName, test_name:row.test_name,
+    total_marks:EXAM_CONFIGS[row.exam_type]?.totalMarks||100,score:row.score,correct:row.correct,wrong:row.wrong,skipped:row.skipped,
+    subject_breakdown:row.subject_breakdown||[],time_taken_seconds:row.time_taken_seconds,completed_at:row.completed_at
+  }));
   // Older local attempts may exist in the result store but not in performance history.
   readLocalResults().forEach(row=>{
     const review=Array.isArray(row.review)?row.review:[];
@@ -763,9 +788,11 @@ function collectAllStudentScores(currentRecord){
   add(currentRecord);
   return rows.sort((a,b)=>new Date(getRecordDate(b)||0)-new Date(getRecordDate(a)||0));
 }
-function renderAllScores(currentRecord){
+function renderAllScores(currentRecord,targetId="allScores"){
+  const target=$(targetId);
+  if(!target)return;
   const rows=collectAllStudentScores(currentRecord);
-  if(!rows.length){$("allScores").innerHTML="<div class='noHistory'>अभी कोई टेस्ट हिस्ट्री सेव नहीं है।</div>";return;}
+  if(!rows.length){target.innerHTML="<div class='noHistory'>अभी कोई टेस्ट हिस्ट्री सेव नहीं है। पुराने Online स्कोर लाने के लिए नीचे Sync विकल्प इस्तेमाल करें।</div>";return;}
   const body=rows.map((row,index)=>{
     const cfg=EXAM_CONFIGS[row.exam_type]||EXAM_CONFIGS.RML;
     const total=Number(row.total_marks)||cfg.totalMarks;
@@ -784,11 +811,159 @@ function renderAllScores(currentRecord){
       <td>${canRetry?`<button class="retryButton" data-exam="${attr(row.exam_type)}" data-id="${attr(row.test_id)}" data-student="${attr(row.student_name||currentRecord.student_name||"")}" onclick="retryTestFromDashboard(this)">फिर से दें</button>`:"—"}</td>
     </tr>`;
   }).join("");
-  $("allScores").innerHTML=`<div class="scoreTableWrap"><table class="scoreHistoryTable">
+  target.innerHTML=`<div class="scoreTableWrap"><table class="scoreHistoryTable">
     <thead><tr><th>क्रम</th><th>टेस्ट</th><th>आपका स्कोर</th><th>सही / गलत / छोड़े</th><th>समय / दिनांक</th><th>दोबारा टेस्ट</th></tr></thead>
     <tbody>${body}</tbody></table></div>
     <p class="scoreMeta">कुल ${rows.length} प्रयास • नवीनतम टेस्ट सबसे ऊपर • कम स्कोर वाले टेस्ट को “फिर से दें” से दोबारा हल करें।</p>`;
 }
+function normalizeStudentName(value){
+  return String(value||"").trim().replace(/\s+/g," ").toLocaleLowerCase();
+}
+function getCurrentStudentName(){
+  return (( $("firstName")?.value||" ").trim()+" "+($("lastName")?.value||"").trim()).replace(/\s+/g," ").trim();
+}
+function renderHistorySyncBox(target){
+  const el=$(target);
+  if(!el)return;
+  const listTarget=target==="studentScoreSyncBox"?"studentScoreList":"allScores";
+  const emailId="historyAdminEmail_"+target;
+  const passwordId="historyAdminPassword_"+target;
+  const messageId="historySyncMessage_"+target;
+  if(adminToken){
+    el.innerHTML=`<div class="historySyncBox"><b>✅ Online Admin सत्यापित</b><p class="scoreMeta">अब आपके पुराने Online परिणाम Supabase से सुरक्षित रूप से लाए जा सकते हैं।</p><button class="p" onclick="syncPreviousOnlineScores('${listTarget}','${target}')">पुराने Online स्कोर Sync करें</button><div id="${messageId}" class="historySyncStatus"></div></div>`;
+  }else{
+    el.innerHTML=`<div class="historySyncBox"><b>पुराने Online टेस्ट स्कोर जोड़ें</b><p class="scoreMeta">पुराने Server Results पढ़ने के लिए Admin सत्यापन जरूरी है। अपना Supabase Admin Email और Password इसी ऐप में भरें। Password इस हिस्ट्री में सेव नहीं होगा।</p>
+      <label for="${emailId}">Supabase Admin Email</label><input id="${emailId}" type="email" autocomplete="username" placeholder="Admin Email">
+      <label for="${passwordId}">Supabase Admin Password</label><input id="${passwordId}" type="password" autocomplete="current-password" placeholder="Admin Password">
+      <button class="p" onclick="syncPreviousOnlineScores('${listTarget}','${target}')">पुराने Online स्कोर Sync करें</button>
+      <div id="${messageId}" class="historySyncStatus"></div></div>`;
+  }
+}
+async function authenticateHistoryAdmin(emailId,passwordId){
+  const email=$(emailId)?.value.trim();
+  const password=$(passwordId)?.value;
+  if(!email||!password)throw Error("पुराने Online स्कोर लाने के लिए Supabase Admin Email और Password भरें।");
+  let response;
+  try{
+    response=await fetch(SUPABASE_URL.replace(/\/$/,"")+"/auth/v1/token?grant_type=password",{
+      method:"POST",mode:"cors",credentials:"omit",cache:"no-store",
+      headers:{"apikey":SUPABASE_PUBLISHABLE_KEY,"Content-Type":"application/json","Accept":"application/json"},
+      body:JSON.stringify({email,password})
+    });
+  }catch(error){throw Error(makeConnectionHint(error,SUPABASE_URL+"/auth/v1/token?grant_type=password"));}
+  const raw=await response.text();
+  let data={};try{data=raw?JSON.parse(raw):{}}catch(_){data={message:raw}}
+  if(!response.ok)throw Error("Supabase Auth HTTP "+response.status+": "+(data.msg||data.message||data.error_description||raw));
+  if(!data.access_token||!data.user?.id)throw Error("Supabase ने मान्य Admin Session नहीं दिया।");
+  adminToken=data.access_token;adminEmail=data.user.email||email;
+  try{
+    const admins=await api("app_admins","GET",null,"?select=user_id&user_id=eq."+encodeURIComponent(data.user.id));
+    if(!Array.isArray(admins)||!admins.length)throw Error("यह Email app_admins में Admin नहीं है। पहले Admin SQL setup पूरा करें।");
+  }catch(error){adminToken=null;adminEmail="";throw error;}
+  const passwordInput=$(passwordId);if(passwordInput)passwordInput.value="";
+}
+async function openMyScoreDashboard(){
+  const name=getCurrentStudentName();
+  if(!name)return alert("पहले First Name और Last Name भरें—वही नाम रखें जो पुराने टेस्ट में लिखा था।");
+  const panel=$("studentScorePanel");
+  panel.innerHTML=`<div id="studentScoreList"></div><div id="studentScoreSyncBox"></div>`;
+  renderAllScores({student_name:name},"studentScoreList");
+  renderHistorySyncBox("studentScoreSyncBox");
+  panel.scrollIntoView?.({behavior:"smooth",block:"nearest"});
+}
+function writeOnlineHistoryToLocal(records){
+  const existing=readPerformanceHistory();
+  const ids=new Set(existing.map(row=>row.supabase_result_id).filter(Boolean).map(String));
+  let added=0;
+  for(const record of records){
+    if(record.supabase_result_id&&ids.has(String(record.supabase_result_id)))continue;
+    existing.push(record);
+    if(record.supabase_result_id)ids.add(String(record.supabase_result_id));
+    added++;
+  }
+  localStorage.setItem(LOCAL_PERFORMANCE_KEY,JSON.stringify(existing.slice(-500)));
+  return added;
+}
+async function syncPreviousOnlineScores(targetId="allScores",syncBoxId="resultHistorySyncBox"){
+  const name=getCurrentStudentName();
+  if(!name)return alert("पहले First Name और Last Name भरें—पुराने टेस्ट में यही नाम लिखा होना चाहिए।");
+  let status=$("historySyncMessage_"+syncBoxId);
+  const setStatus=message=>{if(status)status.textContent=message;};
+  try{
+    setStatus("Admin सत्यापन और पुराने Online Results लोड हो रहे हैं...");
+    if(!adminToken)await authenticateHistoryAdmin("historyAdminEmail_"+syncBoxId,"historyAdminPassword_"+syncBoxId);
+    const pattern="*"+name.trim().split(/\s+/).map(part=>encodeURIComponent(part)).join("*")+"*";
+    const query="?select=id,test_id,exam_type,student_name,score,correct,wrong,skipped,answers,review,created_at&student_name=ilike."+pattern+"&order=created_at.asc";
+    const serverRows=await api("results","GET",null,query);
+    const matches=(serverRows||[]).filter(row=>normalizeStudentName(row.student_name)===normalizeStudentName(name)&&EXAM_CONFIGS[row.exam_type]);
+    if(!matches.length){
+      setStatus("इस नाम से कोई Online Result नहीं मिला। पुराने टेस्ट में लिखा हुआ First Name / Last Name बिल्कुल मिलाकर देखें। अगर पुराने परिणाम Local Save हुए थे, वे इसी Browser की Local History से दिखेंगे।");
+      const current={student_name:name};
+      renderAllScores(current,targetId);
+      return;
+    }
+    const ids=[...new Set(matches.map(row=>String(row.test_id)).filter(id=>/^\d+$/.test(id)))];
+    let testRows=[];
+    if(ids.length){
+      testRows=await api("tests","GET",null,"?select=id,name,questions,exam_type,duration&id=in.("+ids.join(",")+")");
+    }
+    const testMap={};for(const item of (testRows||[]))testMap[String(item.id)]=item;
+    const imported=[];
+    for(const row of matches){
+      const cfg=EXAM_CONFIGS[row.exam_type];
+      const review=Array.isArray(row.review)?row.review:[];
+      const metaEntry=review.find(item=>item&&item._meta);
+      const meta=metaEntry?metaEntry._meta:{};
+      const item=testMap[String(row.test_id)]||{};
+      let answerList=Array.isArray(row.answers)?row.answers:[];
+      if(answerList.length!==100&&review.length){
+        const answerRows=review.filter(item=>item&&!item._meta);
+        if(answerRows.length===100)answerList=answerRows.map(item=>item.user==null?null:item.user);
+      }
+      let breakdown=Array.isArray(meta.subject_breakdown)?meta.subject_breakdown:[];
+      if(!breakdown.length&&Array.isArray(item.questions)&&item.questions.length===100&&answerList.length===100){
+        const previousConfig=examConfig;
+        const previousExam=selectedExam;
+        try{selectedExam=row.exam_type;examConfig=cfg;breakdown=calculateSubjectBreakdown(item.questions,answerList,row.exam_type);}
+        finally{examConfig=previousConfig;selectedExam=previousExam;}
+      }
+      let correct=Number(row.correct)||0,wrong=Number(row.wrong)||0,skipped=Number(row.skipped)||0;
+      if(answerList.length===100&&Array.isArray(item.questions)&&item.questions.length===100){
+        correct=0;wrong=0;skipped=0;
+        answerList.forEach((answer,index)=>{if(answer==null)skipped++;else if(answer===item.questions[index].a)correct++;else wrong++;});
+      }
+      imported.push({
+        attempt_id:"SUPABASE-RESULT-"+String(row.id),supabase_result_id:String(row.id),
+        test_id:String(row.test_id),test_name:item.name||("Test "+String(row.test_id)),
+        exam_type:row.exam_type,student_name:row.student_name,score:Number(row.score)||0,total_marks:cfg.totalMarks,
+        correct,wrong,skipped,subject_breakdown:breakdown,
+        time_taken_seconds:meta.time_taken_seconds??null,completed_at:meta.completed_at||row.created_at||null,
+        rank:null,rank_total:null,rank_source:"online-history",online:true
+      });
+    }
+    const added=writeOnlineHistoryToLocal(imported);
+    // Mark tests as already attempted so the test list also reflects the earlier attempts.
+    for(const record of imported){
+      const item=testMap[String(record.test_id)];
+      if(item){
+        try{markTestTaken({...item,exam_type:record.exam_type},{
+          score:record.score,correct:record.correct,wrong:record.wrong,skipped:record.skipped,
+          completed_at:record.completed_at,time_taken_seconds:record.time_taken_seconds,
+          subject_breakdown:record.subject_breakdown
+        });}catch(_){ }
+      }
+    }
+    renderAllScores({student_name:name},targetId);
+    const message="✅ "+matches.length+" पुराने Online Results मिले। "+added+" नए परिणाम हिस्ट्री में जोड़े गए।"+
+      (imported.some(row=>!row.subject_breakdown.length)?" कुछ पुराने परिणामों का विषयवार विवरण उपलब्ध नहीं था; जहाँ प्रश्न और उत्तर उपलब्ध थे, वहाँ उसका विवरण दोबारा निकाला गया।":"");
+    setStatus(message);
+    const syncStatus=$("historySyncMessage_"+syncBoxId);
+    if(syncStatus)syncStatus.textContent=message;
+  }catch(error){
+    setStatus("पुराने स्कोर Sync नहीं हो पाए: "+(error.message||error));
+  }
+}
+
 async function retryTestFromDashboard(button){
   const examType=button?.dataset?.exam;
   const testId=button?.dataset?.id;
